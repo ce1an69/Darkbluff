@@ -1,19 +1,42 @@
 # Darkbluff
 
-Darkbluff is a CLI/TUI text-based deduction game design project.
-
-The player takes the role of a cat with heterochromatic eyes: the right eye sees the surface world, while the left eye sees the shadow world. Information from the surface world is always true, while information from the shadow world is always false. Players switch between both worlds, collect clues, judge characters, and use logic to reach different endings.
+A CLI/TUI mystery deduction game. Play as a cat with heterochromia — right eye sees the surface world (truth), left eye sees the shadow world (lies). Gather clues, judge characters, and piece together the truth.
 
 ## Status
 
-The project is currently in the design documentation stage. Core rules, command design, data formats, save system, and technical architecture are documented under `docs/`.
+Core engine (content/save/engine/CLI) implemented — **128 tests passing**. TUI layer not yet built.
 
-## Technical Direction
+## Quick Start
 
-- Rust
-- ratatui
-- crossterm
-- YAML + Markdown driven content
+```bash
+# Validate content data
+cargo run -- check --data-dir tests/fixtures/data
+
+# Run the game (TUI not yet available)
+cargo run
+
+# Run tests
+cargo test
+```
+
+## Tech Stack
+
+Rust · serde/JSON · YAML (serde_yml) · pulldown-cmark · clap · tracing · dirs · chrono
+
+YAML + Markdown data-driven content, fully separated from code. `include_dir` embedded mode planned for release.
+
+## Project Layout
+
+```
+src/
+├── content/   # Content engine (models/loader/checker/queries, stateless)
+├── save/      # Save system (atomic writes/checkpoint rollback/snapshots/migration)
+├── engine/    # Game engine (condition eval/command parsing/state machine/judgment flow)
+├── cli.rs     # CLI (check subcommand)
+└── log.rs     # Logging (check→stderr, play→file)
+docs/          # Design documents
+tests/fixtures/data/  # Test dataset
+```
 
 ## License
 
