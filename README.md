@@ -4,13 +4,13 @@ CLI/TUI 文字推理游戏。玩家扮演一只异色瞳的猫——右眼看表
 
 ## 当前状态
 
-核心引擎(content/save/engine/cli)已完成,**128 测试通过**。TUI 渲染层待实现。
+核心引擎(content/save/engine/cli)已完成,**133 测试通过**。TUI 渲染层待实现。
 
 ## 快速开始
 
 ```bash
 # 内容校验
-cargo run -- check --data-dir tests/fixtures/data
+cargo run -- check --data-dir crates/darkbluff-core/tests/fixtures/data
 
 # 进入游戏（TUI 尚未实现）
 cargo run
@@ -23,7 +23,7 @@ cargo test
 
 Rust · serde/JSON · YAML(serde_yml) · pulldown-cmark · clap · tracing · dirs · chrono
 
-数据结构 YAML + Markdown,与代码完全分离。发布模式将通过 `include_dir` 内嵌数据(待实现)。
+数据结构 YAML + Markdown,与代码完全分离。正式 `data/` 与发布模式 `include_dir` 内嵌待实现；当前示例使用测试 fixture。
 
 ## 项目结构
 

@@ -343,6 +343,7 @@ required_judgments: [judge_wolf]    # 终章也必须通过必要审判结束
 **说明**:
 
 - `source` — 格式为 `{character_id}.{topic_id}`，表示该线索由哪个对话触发
+- `source` 必须严格为两段，且只能包含一个点号；如 `wolf.whereabouts.extra` 视为非法
 - `world` — 表示在哪个世界版本中触发；必须与 `source` 对应对话实际存在的世界一致（如对话只有 `[surface]` 版本，`world` 只能为 `surface`）。引擎启动校验一致性（见 [content-engine.md](content-engine.md)）
 - 当玩家通过 `ask` 查看对应对话时，自动收集该线索
 - 线索 id（如 `wolf_alibi`）可被 `chapter.yaml` 中的 `unlock_after` 条件表达式引用，实现话题解锁

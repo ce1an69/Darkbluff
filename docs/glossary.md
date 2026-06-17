@@ -123,9 +123,9 @@
 
 | 命名 | 解释 |
 |------|------|
-| `ContentEngine` | 无状态的加载/查询层，只做加载和查询 |
+| `ContentEngine` | 无状态的加载/查询层，只做加载和查询；引用完整性由 `check` 校验 |
 | `darkbluff check` | 离线校验命令，不启动 TUI |
-| Startup validation | 启动校验：引用完整性、id 全局唯一、条件扁平、章节图无环、可达性 |
+| Startup validation | 启动校验：`ContentEngine::load` 加载内容，`check(engine)` 校验引用完整性、id 全局唯一、条件扁平、章节图无环、可达性 |
 | 🆕 首章校验 | 有且仅有一个根节点（无入度），该根即首章 |
 | 🆕 `get_characters_in_scene` | 查询某场景在场角色（供 `ask` 无参数菜单） |
 | 🆕 `get_topics` | 查询某角色话题原始数据（可见性由引擎层用 FactSet 求值） |
@@ -138,11 +138,13 @@
 
 | 命名 | 解释 |
 |------|------|
-| App state | `Title` / `ShowingIntro` / `Exploring` / `ChoosingTopic` / `ViewingNote` / `ViewingMap` / `Confirming` / `Transitioning` / `ShowingOutro` / `Ending` |
+| SessionState | `Title` / `ShowingIntro` / `Exploring` / `ChoosingAskCharacter` / `ChoosingAskTopic` / `ChoosingJudgeCharacter` / `ChoosingMove` / `ChoosingCheckpoint` / `Confirming` / `ShowingOutro` / `Ending` |
 | 🆕 `ShowingIntro` | 章节开场/过场文本（`intro`）展示中，确认后进入 `Exploring` |
 | 🆕 `ShowingOutro` | 终章结局文本（`outro`）展示中，确认后进入 `Ending`；无 `outro` 则跳过 |
-| 🆕 `ChoosingCharacter` | `ask`/`judge` 无参数第一步：选场景在场角色（ask）或本章未审判角色（judge） |
-| 🆕 `ViewingMap` | 章节树 / checkpoint 地图浏览中，可选择已经历过的 checkpoint 回滚 |
+| 🆕 `ChoosingAskCharacter` / `ChoosingAskTopic` | `ask` 无参数的两步菜单：当前场景在场角色 → 可问话题 |
+| 🆕 `ChoosingJudgeCharacter` | `judge` 无参数时选择本章未审判角色 |
+| 🆕 `ChoosingMove` | `move` 无参数时选择当前可达场景 |
+| 🆕 `ChoosingCheckpoint` | `map` 后选择已经历过的 checkpoint 回滚 |
 | `settings.json` / `motion` | 独立设置文件 / 动画偏好（`full`/`reduced`/`off`） |
 | Atomic write | 原子写入（`.tmp`→rename）+ `.bak` 备份 + 损坏回退 |
 | CLI | `darkbluff`(=play) / `play` / `check` 子命令；`--no-motion`、`--data-dir` flag |

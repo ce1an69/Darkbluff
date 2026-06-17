@@ -1,7 +1,7 @@
 //! 内容引擎：无状态的加载 / 校验 / 查询层。
 //!
-//! 设计见 docs/content-engine.md。职责：从 `data/` 加载全部内容到内存、启动校验、
-//! 提供统一查询接口。内容引擎本身无状态；游戏状态由 [`crate::engine`] 管理。
+//! 设计见 docs/content-engine.md。职责：从 `data/` 加载全部内容到内存、提供统一查询接口，
+//! 并通过 [`check`] 执行引用完整性校验。内容引擎本身无状态；游戏状态由 [`crate::engine`] 管理。
 
 pub mod checker;
 pub mod condition;

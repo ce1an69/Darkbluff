@@ -4,13 +4,13 @@ A CLI/TUI mystery deduction game. Play as a cat with heterochromia — right eye
 
 ## Status
 
-Core engine (content/save/engine/CLI) implemented — **128 tests passing**. TUI layer not yet built.
+Core engine (content/save/engine/CLI) implemented — **133 tests passing**. TUI layer not yet built.
 
 ## Quick Start
 
 ```bash
 # Validate content data
-cargo run -- check --data-dir tests/fixtures/data
+cargo run -- check --data-dir crates/darkbluff-core/tests/fixtures/data
 
 # Run the game (TUI not yet available)
 cargo run
@@ -23,7 +23,7 @@ cargo test
 
 Rust · serde/JSON · YAML (serde_yml) · pulldown-cmark · clap · tracing · dirs · chrono
 
-YAML + Markdown data-driven content, fully separated from code. `include_dir` embedded mode planned for release.
+YAML + Markdown data-driven content, fully separated from code. The production `data/` directory and `include_dir` embedded mode are still planned; current examples use the test fixture dataset.
 
 ## Project Layout
 

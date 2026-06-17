@@ -2,12 +2,12 @@
 
 > 属于 DarkBluff 设计文档。主索引见 [design.md](design.md)。引擎加载的数据格式见 [data-formats.md](data-formats.md)；指令执行中的运行时错误处理见 [commands.md](commands.md)。
 
-内容引擎是一个无状态的加载/查询层，负责将 `data/` 目录下的所有游戏数据加载到内存，并提供统一的查询接口。
+内容引擎是一个无状态的加载/查询层，负责将 `data/` 目录下的所有游戏数据加载到内存，并提供统一的查询接口。引用完整性校验由独立的 `check(engine)` 流程执行，供 `darkbluff check` 和 `play` 启动前校验复用。
 
 ## 核心职责
 
 1. **自动发现**: 扫描 `data/chapters/` 下所有子目录，每个含 `chapter.yaml` 的目录注册为一个章节
-2. **启动校验**: 验证所有引用关系的完整性
+2. **启动校验**: `check(engine)` 验证所有引用关系的完整性
    - 话题 ID 在对应 `.md` 文件中存在
    - 章节跳转目标有效（`next.default` 与 `next.branches[].target` 都指向已注册章节）
    - 场景/角色 ID 在全局定义中存在
@@ -33,9 +33,9 @@
 3. **id 索引**: 建立 id → 实体的索引，支持存档加载（按 id 直接匹配）与内容查询
 4. **场景覆盖透明化**: 查询场景描述时，内部处理覆盖逻辑，调用方无需关心来源
 5. **对话解析**: 使用 fence-aware 行扫描解析对话标题层级（code fence 内的 `##`/`###` 不被当作标题），并缓存解析结果
-6. **内嵌/外置双模式**: 通过 feature flag 切换
+6. **内嵌/外置双模式**: 当前已抽象 `DataSource`，发布模式内嵌数据为后续 TODO
    - 开发模式：从文件系统读取 `data/` 目录
-   - 发布模式：通过 `include_dir!` 将数据内嵌到二进制文件
+   - 发布模式：计划通过 `include_dir!` 将数据内嵌到二进制文件
 7. **独立校验命令**: 校验能力必须可被 `darkbluff check` 调用，便于在 CI 或内容编辑流程中提前发现错误
 
 ## FactSet
@@ -126,13 +126,14 @@ fn next_chapter(chapter: &Chapter, facts: &FactSet) -> &str {
 
 ```rust
 impl ContentEngine {
-    /// 初始化：扫描并加载所有内容，校验引用完整性
+    /// 扫描并加载所有内容；引用完整性由 check(engine) 单独校验
     fn load(source: DataSource) -> Result<Self>;
 
     /// 章节查询
     fn get_chapter(id: &str) -> Option<&Chapter>;
-    fn list_chapters() -> Vec<&ChapterMeta>;
-    fn get_chapter_tree() -> &ChapterTree;
+    fn list_chapters() -> Vec<ChapterMeta>;
+    fn first_chapter_id() -> Option<&str>;
+    fn ending_chapter_ids() -> Vec<&str>;
     fn get_next_chapter(chapter_id: &str, facts: &FactSet) -> Option<&str>;  // 返回目标章节 id
 
     /// 场景查询（自动处理章节覆盖）

@@ -198,10 +198,10 @@ pub struct Clue {
 /// 将 `{character}.{topic}` 形式的来源字符串解析为 `(character_id, topic_id)`。
 /// 缺少点号或存在多余点号时返回 `None`。
 pub fn parse_dialogue_source(source: &str) -> Option<(&str, &str)> {
-    let mut it = source.splitn(2, '.');
+    let mut it = source.split('.');
     let ch = it.next()?;
     let topic = it.next()?;
-    if ch.is_empty() || topic.is_empty() {
+    if it.next().is_some() || ch.is_empty() || topic.is_empty() {
         return None;
     }
     Some((ch, topic))
@@ -278,8 +278,7 @@ mod tests {
         assert_eq!(parse_dialogue_source("nope"), None);
         assert_eq!(parse_dialogue_source(".topic"), None);
         assert_eq!(parse_dialogue_source("wolf."), None);
-        // 多于一个点号：splitn(2, '.') 把后段整体当 topic，视为非法
-        assert_eq!(parse_dialogue_source("a.b.c"), Some(("a", "b.c")));
+        assert_eq!(parse_dialogue_source("a.b.c"), None);
     }
 
     #[test]
