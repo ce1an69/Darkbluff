@@ -16,79 +16,86 @@
 | 输入组件      | tui-prompts                      | 文本输入 + 自动补全 + 选择菜单                                                                  |
 | YAML 解析     | serde + serde_yml                | 数据文件序列化/反序列化。`serde_yml` 是 `serde_yaml`（已停止维护）的活跃 fork，API 基本兼容 |
 | JSON 存档     | serde_json                       | 存档读写                                                                                        |
-| 对话文本解析  | pulldown-cmark + 自定义 AST 规则 | 按 Markdown 标题层级识别话题和世界版本                                                          |
+| 对话文本解析  | fence-aware 行扫描           | 按 Markdown 标题层级（`##`/`###`）识别话题和世界版本；code fence 内的标题不被误识别            |
 | 内容内嵌      | include_dir                      | 发布模式下将 `data/` 内嵌到二进制                                                               |
 | 存档路径      | dirs                             | 获取跨平台应用数据目录                                                                          |
 
 ## 项目结构
 
 ```
-darkbluff/
-├── Cargo.toml
-├── src/
-│   ├── main.rs                # CLI 入口
-│   ├── cli.rs                 # CLI 参数（play/check/no-motion 等）
-│   ├── ui/                    # UI 层
-│   │   ├── mod.rs
-│   │   ├── layout.rs          # 面板布局定义（含顶部章节/场景/视角指示器）
-│   │   ├── scene_panel.rs     # 场景描述面板（Markdown 渲染）+ 在场角色列表（由 appears_in 推导）
-│   │   ├── input_panel.rs     # 输入框 + 选项菜单（ask 场景角色→话题、judge 本章角色、map checkpoint 等菜单）
-│   │   ├── note_panel.rs      # 笔记面板（对话/叙事/审判/章节树 标签页切换）
-│   │   ├── map_panel.rs       # 章节树 / checkpoint 地图（基于 discovered + checkpoints 渲染）
-│   │   └── animation.rs       # 动画效果管理
-│   ├── engine/                # 游戏引擎层
-│   │   ├── mod.rs
-│   │   ├── commands.rs        # 指令解析（ask/judge/move/gaze/map/note/help/quit）
-│   │   ├── state.rs           # 游戏状态机
-│   │   ├── outcome.rs         # UI 无关的 Input / Outcome / SessionState API
-│   │   ├── ask.rs             # ask 指令流程
-│   │   ├── judge.rs           # judge 指令与章节推进
-│   │   ├── navigation.rs      # move / gaze
-│   │   ├── map.rs             # checkpoint 菜单与回滚
-│   │   ├── system.rs          # note / quit
-│   │   ├── chapter_flow.rs    # 章节进入、intro/outro、结局
-│   │   ├── note_view.rs       # 笔记视图组装
-│   │   ├── logic.rs           # 纯领域查询与存档 reconcile
-│   │   └── condition.rs       # 条件表达式求值（扁平 all_of/any_of/not）
-│   ├── content/               # 内容引擎（无状态加载/查询层）
-│   │   ├── mod.rs
-│   │   ├── engine.rs          # 内容引擎核心（自动发现、校验、查询接口）
-│   │   ├── loader.rs          # YAML/Markdown 文件加载器
-│   │   ├── models.rs          # 数据模型（Scene/Character/Chapter 等）
-│   │   ├── dialogue.rs        # 对话 Markdown AST 解析器
-│   │   └── checker.rs         # 内容完整性校验（darkbluff check）
-│   └── save/                  # 存档系统
-│       ├── mod.rs
-│       ├── schema.rs          # 存档数据结构定义
-│       ├── snapshot.rs        # note 快照读写
-│       ├── checkpoint.rs      # 检查点创建与回滚（数组长度截断）
-│       ├── atomic.rs          # 原子写入 + .bak 备份 + 损坏恢复
-│       └── migration.rs       # 存档版本迁移逻辑
-├── data/                      # 游戏内容数据
-│   ├── scenes/
-│   ├── characters/
-│   ├── chapters/
-│   └── text/
-└── docs/                      # 设计文档（本目录）
+darkbluff/                          # Cargo workspace
+├── Cargo.toml                      # workspace 清单（members + 共享 package 字段）
+├── crates/
+│   ├── darkbluff-core/             # 核心库：渲染无关、无终端可测
+│   │   ├── src/
+│   │   │   ├── engine/             # 游戏引擎层（对渲染层的门面）
+│   │   │   │   ├── state.rs        #   游戏状态机 + Session
+│   │   │   │   ├── outcome.rs      #   UI 无关的 Input / Outcome / SessionState 契约
+│   │   │   │   ├── commands.rs     #   指令解析（ask/judge/move/gaze/map/note/help/quit）
+│   │   │   │   ├── ask.rs          #   ask 指令流程
+│   │   │   │   ├── judge.rs        #   judge 指令与章节推进
+│   │   │   │   ├── navigation.rs   #   move / gaze
+│   │   │   │   ├── map.rs          #   checkpoint 菜单与回滚
+│   │   │   │   ├── system.rs       #   标题界面 / note / quit
+│   │   │   │   ├── chapter_flow.rs #   章节进入、intro/outro、结局
+│   │   │   │   ├── note_view.rs    #   笔记视图组装
+│   │   │   │   ├── logic.rs        #   纯领域查询与存档 reconcile
+│   │   │   │   └── condition.rs    #   条件表达式求值（扁平 all_of/any_of/not）
+│   │   │   ├── content/            # 内容引擎（无状态加载/查询层）
+│   │   │   │   ├── engine.rs       #   内容引擎核心（自动发现、查询接口）
+│   │   │   │   ├── loader.rs       #   YAML/Markdown 文件加载器（DataSource 抽象）
+│   │   │   │   ├── models.rs       #   数据模型（Scene/Character/Chapter 等）
+│   │   │   │   ├── dialogue.rs     #   对话 fence-aware 行扫描解析器
+│   │   │   │   ├── condition.rs    #   条件求值（eval/topic_visible）
+│   │   │   │   └── checker/        #   内容完整性校验（darkbluff check）
+│   │   │   ├── save/               # 存档系统
+│   │   │   │   ├── store.rs        #   SaveStore 编排（加载/保存/新游戏/设置）
+│   │   │   │   ├── schema.rs       #   存档数据结构定义
+│   │   │   │   ├── checkpoint.rs   #   检查点创建与回滚（数组长度截断）
+│   │   │   │   ├── snapshot.rs     #   笔记快照读写 + 孤儿清理
+│   │   │   │   ├── atomic.rs       #   原子写入 + .bak 备份 + 损坏恢复
+│   │   │   │   ├── clock.rs        #   时钟抽象（注入，便于测试）
+│   │   │   │   └── migration.rs    #   存档版本迁移逻辑
+│   │   │   ├── world.rs            # 叶子：视角枚举（surface/shadow）
+│   │   │   └── error.rs            # 叶子：跨层错误 AppError / Result
+│   │   └── tests/
+│   │       ├── *.rs                # e2e / session / checker / content_engine 集成测试
+│   │       └── fixtures/data/      # 测试内容数据集
+│   ├── darkbluff/                  # 二进制：装配 + CLI
+│   │   └── src/
+│   │       ├── main.rs             # 入口（mod cli / mod log）
+│   │       ├── cli.rs              # CLI 参数（play/check/--no-motion/--data-dir）
+│   │       └── log.rs              # 日志初始化（check→stderr，play→文件）
+│   └── darkbluff-tui/              # 渲染层（占位；实装时仅依赖 core 公共契约）
+│       └── src/lib.rs
+├── data/                           # 游戏内容数据（发布时 include_dir 内嵌，TODO）
+│   ├── scenes/  characters/  chapters/  text/
+└── docs/                           # 设计文档（本目录）
 ```
+
+依赖方向由 Cargo 强制（单向、无环）：`darkbluff`（bin）→ `darkbluff-core` ← `darkbluff-tui`。
+core 不含 clap/ratatui；`darkbluff check` 无需编译 TUI 重依赖。TUI 仅通过 `Session` / `Input` / `Outcome` 驱动，无法触及 content/save 内部。
+
 
 ## 架构分层
 
+UI 层是独立的 `darkbluff-tui` crate；引擎层 / 存档层 / 内容引擎均在 `darkbluff-core` crate 内（编译器强制单向依赖 `darkbluff` → `darkbluff-core` ← `darkbluff-tui`）。
+
 ```
 ┌─────────────────────────────────────────┐
-│  UI 层 (ui/)                            │
+│  UI 层 (darkbluff-tui crate)            │
 │  面板布局、视角指示器、Markdown 渲染、  │
 │  动画、输入交互                          │
 ├─────────────────────────────────────────┤
-│  引擎层 (engine/)                       │
+│  引擎层 (darkbluff-core::engine)        │
 │  指令处理、游戏状态机、审判逻辑、       │
 │  自动推进章节、条件求值                 │
 ├─────────────────────────────────────────┤
-│  存档层 (save/)                         │
+│  存档层 (darkbluff-core::save)          │
 │  存档读写、检查点回滚、原子写入与备份、 │
 │  版本迁移、兼容性处理                   │
 ├─────────────────────────────────────────┤
-│  内容引擎 (content/)                    │
+│  内容引擎 (darkbluff-core::content)     │
 │  自动发现、校验、统一查询接口           │
 ├─────────────────────────────────────────┤
 │  游戏数据 (data/)                       │
@@ -197,7 +204,7 @@ darkbluff --data-dir <path>      # 指定内容数据目录（仅开发 feature 
 ### 资源估算
 
 - **内存**: 全量加载所有内容数据到内存，预期占用 < 10 MB，完全可行
-- **启动时间**: YAML 解析 + Markdown AST 解析 + 启动校验，预期 < 500ms（即使含 30 个章节）
+- **启动时间**: YAML 解析 + 对话行扫描解析 + 启动校验，预期 < 500ms（即使含 30 个章节）
 - **二进制体积**: `include_dir` 内嵌后，预期增加 1–3 MB（可接受，仍为小型 CLI 工具）
 - **编译时间**: `include_dir!` 在编译期扫描 `data/`，数据量在上述规模内对编译时间影响可忽略
 
