@@ -20,9 +20,15 @@ impl Session {
             tracing::warn!("存档回退: {w}");
         }
         self.state = SessionState::Exploring;
+        let has_warnings = !warnings.is_empty();
         let mut msgs = warnings;
         msgs.extend(self.scene_description_messages());
-        Outcome::Message(Message::info(msgs))
+        let message = if has_warnings {
+            Message::warning(msgs)
+        } else {
+            Message::info(msgs)
+        };
+        Outcome::Message(message)
     }
 
     /// 开始新游戏：初始化首章。

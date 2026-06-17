@@ -1,8 +1,8 @@
-//! 引擎层的纯查询助手：为菜单候选取值，不修改状态。
+//! 引擎层的菜单候选查询与存档 reconcile 助手。
 //!
-//! 设计见 docs/commands.md「输入辅助」「补全候选范围」、docs/content-engine.md
-//! 「查询接口」。这些函数读取 [`crate::content::ContentEngine`] 与 [`crate::save::Save`]，
-//! 返回当前上下文下可选的 (id, label)。
+//! - `ask_topic_options` / `unjudged_character_options` / `move_options`：为各菜单提供
+//!   当前上下文下的 (id, label) 候选（只读）。设计见 docs/commands.md「输入辅助」。
+//! - `reconcile_save`：继续游戏时校正存档中失效的内容引用（会修改存档并返回 warning）。
 
 use crate::content::condition::topic_visible;
 use crate::content::ContentEngine;

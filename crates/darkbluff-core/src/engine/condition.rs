@@ -1,8 +1,9 @@
-//! 引擎层的条件/事实集合助手。
+//! 引擎层与存档相关的条件/事实集合助手。
 //!
-//! 纯求值（`eval` / `topic_visible` / `resolve_next`）位于 [`crate::content::condition`]，
-//! 因其仅依赖内容类型。本模块保留与存档相关、或服务于「是否完成本章必要审判」的运行时
-//! 助手。存档事实集合构造（`build_factset`）在存档层就绪后补齐（见 Phase 8）。
+//! 纯条件求值（`eval` / `topic_visible`）位于 [`crate::content::condition`]，因仅依赖内容
+//! 类型；本模块保留需要读取存档（[`Save`]）的运行时助手：`FactSet` 别名、
+//! `build_factset`（合并 chapter_path 的事实）、`chapter_complete` / `required_judgments_complete`
+//! （必要审判是否完成）。
 
 use std::collections::HashSet;
 

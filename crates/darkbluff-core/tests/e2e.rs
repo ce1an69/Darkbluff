@@ -153,7 +153,7 @@ fn map_rollback_before_judgment_undoes_judgment() {
         Outcome::MenuRequested { options, .. } => assert_eq!(options.len(), 2),
         o => panic!("got {:?}", o),
     }
-    // 列表顺序：[chapter_start, before_judgment]，故 before_judgment = Pick(1)
+    // 列表顺序：[chapter_start, before_judgment]，故 before_judgment = Index(1)
     match s.handle(Input::Select(Selection::Index(1))) {
         Outcome::ConfirmationRequested { .. } => {}
         o => panic!("got {:?}", o),
