@@ -218,7 +218,9 @@ impl Session {
         checkpoint::create_before_judgment(&mut self.save, &ch, &j.id, &now);
         let result_text = self.engine.get_result_text(&ch, &j.id).unwrap_or("").to_string();
         let rel = judgment_snapshot_path(&ch, &j.id);
-        let _ = self.store.snapshots().write(&rel, &result_text);
+        if let Err(e) = self.store.snapshots().write(&rel, &result_text) {
+            tracing::warn!("审判快照写入失败: chapter={ch}, judgment={}, error={e}", j.id);
+        }
         self.save.judgments_mut(&ch).push(JudgmentMade {
             judgment: j.id.clone(),
             result_snapshot: rel,
@@ -267,13 +269,22 @@ impl Session {
             if let Some(outro) = self.engine.get_outro_text(&ch).map(|s| s.to_string()) {
                 if !self.save.viewed_outros.contains_key(&ch) {
                     let rel = outro_snapshot_path(&ch);
-                    let _ = self.store.snapshots().write(&rel, &outro);
-                    self.save.viewed_outros.insert(ch.clone(), rel);
+                    match self.store.snapshots().write(&rel, &outro) {
+                        Ok(path) => {
+                            self.save.viewed_outros.insert(ch.clone(), path);
+                        }
+                        Err(e) => {
+                            tracing::warn!("结局快照写入失败: chapter={ch}, error={e}");
+                        }
+                    }
                 }
                 self.state = AppState::ShowingOutro;
                 self.persist();
-                let _ = prelude;
-                return Outcome::Outro { text: outro };
+                let text = match prelude {
+                    Some(p) if !p.is_empty() => format!("{p}\n\n{outro}"),
+                    _ => outro,
+                };
+                return Outcome::Outro { text };
             } else {
                 self.state = AppState::Ending;
                 return self.ending_outcome();

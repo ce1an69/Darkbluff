@@ -65,8 +65,14 @@ impl Session {
         if let Some(text) = self.engine.get_intro_text(chapter_id).map(|s| s.to_string()) {
             if !self.save.viewed_intros.contains_key(chapter_id) {
                 let rel = intro_snapshot_path(chapter_id);
-                let _ = self.store.snapshots().write(&rel, &text);
-                self.save.viewed_intros.insert(chapter_id.into(), rel);
+                match self.store.snapshots().write(&rel, &text) {
+                    Ok(path) => {
+                        self.save.viewed_intros.insert(chapter_id.into(), path);
+                    }
+                    Err(e) => {
+                        tracing::warn!("开场快照写入失败: chapter={chapter_id}, error={e}");
+                    }
+                }
             }
             self.pending.intro_needs_checkpoint = true;
             self.state = AppState::ShowingIntro;

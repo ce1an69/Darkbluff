@@ -46,9 +46,9 @@ pub fn run() -> Result<()> {
             // play 模式日志写文件（TUI 用 alternate screen，不写 stderr）
             if let Some(dir) = crate::log::default_log_dir() {
                 let _guard = crate::log::init_to_file(dir);
-                return run_play();
+                return run_play(&cli);
             }
-            run_play()
+            run_play(&cli)
         }
         Command::Check => {
             crate::log::init_to_stderr();
@@ -65,9 +65,31 @@ fn resolve_data_dir(cli: &Cli) -> Result<PathBuf> {
     Ok(PathBuf::from("data"))
 }
 
-fn run_play() -> Result<()> {
+fn run_play(cli: &Cli) -> Result<()> {
+    validate_play_content(cli)?;
     // TUI 渲染层（ui/）暂未实现。
     eprintln!("DarkBluff TUI 尚未实现。当前可用子命令：darkbluff check --data-dir <path>");
+    Ok(())
+}
+
+fn validate_play_content(cli: &Cli) -> Result<()> {
+    let data_dir = resolve_data_dir(cli)?;
+    if cli.data_dir.is_none() && !data_dir.exists() {
+        return Ok(());
+    }
+
+    let src = FilesystemSource::new(&data_dir)?;
+    let engine = ContentEngine::load(&src)?;
+    let report = check(&engine);
+    if report.has_errors() {
+        let errors = report.errors().count();
+        let warnings = report.warnings().count();
+        tracing::warn!(errors, warnings, "内容校验未通过，已阻止 play 启动");
+        return Err(crate::error::AppError::Content(format!(
+            "内容校验未通过：{errors} 个错误，{warnings} 个警告。请先运行 darkbluff check --data-dir {}",
+            data_dir.display()
+        )));
+    }
     Ok(())
 }
 

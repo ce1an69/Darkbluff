@@ -259,6 +259,23 @@ fn hints_only_in_first_chapter() {
     assert_ne!(s.save().current_chapter, "c1");
 }
 
+#[test]
+fn ending_judgment_with_outro_keeps_result_text() {
+    let mut s = build_session();
+    s.start_new_game();
+    s.handle(Input::Ack);
+    s.handle(Input::Text("judge wolf".into()));
+    assert_eq!(s.save().current_chapter, "c_truth");
+
+    match s.handle(Input::Text("judge wolf".into())) {
+        Outcome::Outro { text } => {
+            assert!(text.contains("终审。"));
+            assert!(text.contains("真相结局。"));
+        }
+        o => panic!("expected outro, got {:?}", o),
+    }
+}
+
 // ----- 标题界面 -----
 
 #[test]
