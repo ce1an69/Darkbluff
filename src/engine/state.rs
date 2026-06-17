@@ -14,6 +14,8 @@ use crate::save::SaveStore;
 
 use crate::engine::hints::Hints;
 
+use crate::engine::outcome::MenuOption;
+
 /// 菜单态下的待定上下文。
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Pending {
@@ -90,6 +92,23 @@ impl Session {
         self.store.save(&self.save).map_err(|e| tracing::error!("存档保存失败: {e}")).is_ok()
     }
 
+    /// 进入标题界面：构建新游戏/继续/退出菜单，附带探索进度。
+    fn enter_title(&mut self) -> Outcome {
+        self.state = AppState::Title;
+        let found = self.save.discovered.endings.len();
+        let total = self.engine.ending_chapter_ids().len();
+        let mut options = vec![MenuOption { id: "new_game".into(), label: "新游戏".into() }];
+        if self.store.has_save() {
+            options.push(MenuOption { id: "continue".into(), label: "继续".into() });
+        }
+        options.push(MenuOption { id: "quit".into(), label: "退出".into() });
+        self.pending.menu = Some(options.clone());
+        Outcome::Menu {
+            title: format!("Darkbluff — 已发现结局 {found}/{total}"),
+            options,
+        }
+    }
+
     // ----- 主分发 -----
 
     pub fn handle(&mut self, input: Input) -> Outcome {
@@ -105,10 +124,71 @@ impl Session {
             (AppState::ShowingOutro, _) => Outcome::Ignored,
 
             (AppState::Ending, Input::Ack) | (AppState::Ending, Input::Cancel) => {
-                self.state = AppState::Title;
-                Outcome::Title
+                self.enter_title()
             }
             (AppState::Ending, _) => Outcome::Ignored,
+
+            // 标题界面：新游戏 / 继续 / 退出
+            (AppState::Title, Input::Pick(i)) => {
+                if self.pending.menu.is_none() {
+                    self.enter_title()
+                } else {
+                    match self.menu_id(i).as_deref() {
+                        Some("new_game") => {
+                            if self.store.has_save() {
+                                self.pending.confirm_rollback_id = Some("new_game".into());
+                                self.state = AppState::Confirming;
+                                Outcome::Confirm {
+                                    prompt: "已有存档，新游戏将覆盖。确认？".into(),
+                                }
+                            } else {
+                                self.start_new_game()
+                            }
+                        }
+                        Some("continue") => match self.store.load() {
+                            Ok(crate::save::LoadResult::Save(save, report)) => {
+                                let mut outcome = self.continue_with(save);
+                                for w in report.warning_messages() {
+                                    if let Outcome::Show(ref mut msgs) = outcome {
+                                        msgs.insert(0, w);
+                                    }
+                                }
+                                outcome
+                            }
+                            _ => Outcome::Show(vec!["存档加载失败。".into()]),
+                        }
+                        Some("quit") => self.do_quit(),
+                        _ => self.enter_title(),
+                    }
+                }
+            }
+            (AppState::Title, _) => {
+                if self.pending.menu.is_none() {
+                    self.enter_title()
+                } else {
+                    Outcome::Ignored
+                }
+            }
+
+            // 破坏性操作确认（复用 confirm_rollback_id：new_game 或 checkpoint 回滚）
+            (AppState::Confirming, Input::Confirm(true)) => {
+                if self.pending.confirm_rollback_id.as_deref() == Some("new_game") {
+                    self.pending.confirm_rollback_id = None;
+                    self.start_new_game()
+                } else {
+                    self.execute_rollback_confirm()
+                }
+            }
+            (AppState::Confirming, Input::Confirm(false)) | (AppState::Confirming, Input::Cancel) => {
+                let was_title = self.pending.confirm_rollback_id.as_deref() == Some("new_game");
+                self.pending.confirm_rollback_id = None;
+                if was_title {
+                    self.enter_title()
+                } else {
+                    self.state = AppState::Exploring;
+                    Outcome::Show(vec!["已取消。".into()])
+                }
+            }
 
             (AppState::Exploring, Input::Text(line)) => self.handle_command(&line),
             (AppState::Exploring, _) => Outcome::Ignored,
@@ -147,13 +227,8 @@ impl Session {
             }
             (AppState::ChoosingCheckpoint, Input::Cancel) => self.cancel_menu(),
 
-            (AppState::Confirming, Input::Confirm(true)) => self.execute_rollback_confirm(),
-            (AppState::Confirming, Input::Confirm(false)) | (AppState::Confirming, Input::Cancel) => {
-                self.state = AppState::Exploring;
-                Outcome::Show(vec!["已取消。".into()])
-            }
-
             // 菜单态下其余输入静默忽略（须先 Esc 退出菜单）
+            #[allow(unreachable_patterns)]
             (_, Input::Pick(_)) | (_, Input::Cancel) | (_, Input::Confirm(_)) | (_, Input::Ack) => {
                 Outcome::Ignored
             }

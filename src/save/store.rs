@@ -80,6 +80,11 @@ impl SaveStore {
         &self.save_dir
     }
 
+    /// 存档文件（或其 .bak）是否存在。
+    pub fn has_save(&self) -> bool {
+        self.save_path.exists() || bak_path(&self.save_path).exists()
+    }
+
     fn read_save_file(&self, path: &Path) -> Result<Save> {
         let text = fs::read_to_string(path)?;
         let save: Save = serde_json::from_str(&text)?;

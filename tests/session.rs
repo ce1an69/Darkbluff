@@ -258,3 +258,42 @@ fn hints_only_in_first_chapter() {
     s.handle(Input::Text("judge wolf".into()));
     assert_ne!(s.save().current_chapter, "c1");
 }
+
+// ----- 标题界面 -----
+
+#[test]
+fn title_shows_menu_no_save() {
+    let mut s = build_session();
+    // 新 Session 在 Title 状态，任意输入触发菜单构建
+    match s.handle(Input::Text("".into())) {
+        Outcome::Menu { title, options } => {
+            assert!(title.contains("Darkbluff"));
+            // 无存档时没有"继续"
+            assert!(!options.iter().any(|o| o.id == "continue"));
+            assert!(options.iter().any(|o| o.id == "new_game"));
+            assert!(options.iter().any(|o| o.id == "quit"));
+        }
+        o => panic!("expected menu, got {:?}", o),
+    }
+}
+
+#[test]
+fn title_new_game_starts_chapter() {
+    let mut s = build_session();
+    s.handle(Input::Text("".into())); // 触发 Title 菜单
+    match s.handle(Input::Pick(0)) {
+        Outcome::Intro { text } => assert!(text.contains("首章开场")),
+        Outcome::Show(_) => {} // 无 intro 时直接 Show
+        o => panic!("expected intro or show, got {:?}", o),
+    }
+}
+
+#[test]
+fn title_quit_exits() {
+    let mut s = build_session();
+    s.handle(Input::Text("".into())); // 触发 Title 菜单 [new_game, quit]
+    match s.handle(Input::Pick(1)) {
+        Outcome::Quit => {}
+        o => panic!("expected quit, got {:?}", o),
+    }
+}
