@@ -19,7 +19,7 @@ mod state;
 mod system;
 
 pub use outcome::{
-    ConfirmationAction, Input, MenuKind, Message, MessageLevel, NoteView, Outcome, Selection,
-    SessionState,
+    ConfirmationAction, Input, MenuKind, MenuOption, Message, MessageLevel, NoteView, Outcome,
+    Selection, SessionState,
 };
 pub use state::Session;

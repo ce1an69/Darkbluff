@@ -166,6 +166,9 @@ pub enum Input {
     Confirm(bool),
     /// 继续确认（intro/outro/ending，按任意键）。
     Ack,
+    /// 强制退出：任意状态都走标准退出路径（持久化 + [`Outcome::QuitRequested`]），
+    /// 供渲染层的退出快捷键（如 Ctrl+C）使用，避免绕过引擎直接结束。
+    Quit,
 }
 
 /// 会话状态（与 architecture.md「状态机」对应；渲染层可据此选择可接受输入）。

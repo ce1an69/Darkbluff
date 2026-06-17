@@ -148,6 +148,9 @@ impl Session {
 
     pub fn handle(&mut self, input: Input) -> Outcome {
         match (&self.state.clone(), input) {
+            // 强制退出：任意状态都走 do_quit（持久化 + QuitRequested），不绕过状态机。
+            (_, Input::Quit) => self.do_quit(),
+
             (SessionState::ShowingIntro, Input::Ack)
             | (SessionState::ShowingIntro, Input::Cancel) => self.ack_intro(),
             (SessionState::ShowingIntro, _) => Outcome::Ignored,

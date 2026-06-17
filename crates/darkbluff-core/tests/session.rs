@@ -225,6 +225,35 @@ fn quit_persists_and_returns() {
 }
 
 #[test]
+fn force_quit_from_title() {
+    // 起始即 Title 态：此处 `Input::Text("quit")` 会被忽略，唯有 `Input::Quit`
+    // 走 do_quit。锁死渲染层退出快捷键（Ctrl+C）在非 Exploring 态的契约。
+    let mut s = build_session();
+    assert_eq!(*s.state(), SessionState::Title);
+    match s.handle(Input::Quit) {
+        Outcome::QuitRequested => {}
+        o => panic!("expected QuitRequested from Title, got {:?}", o),
+    }
+}
+
+#[test]
+fn force_quit_from_menu_state() {
+    // 菜单态下退出：`Input::Text` 在 Choosing* 态被忽略，`Input::Quit` 仍须走 do_quit。
+    let mut s = build_session();
+    s.start_new_game();
+    s.handle(Input::Ack);
+    match s.handle(Input::Text("ask".into())) {
+        Outcome::MenuRequested { .. } => {}
+        o => panic!("expected menu, got {:?}", o),
+    }
+    assert_eq!(*s.state(), SessionState::ChoosingAskCharacter);
+    match s.handle(Input::Quit) {
+        Outcome::QuitRequested => {}
+        o => panic!("expected QuitRequested from menu state, got {:?}", o),
+    }
+}
+
+#[test]
 fn hint_gaze_after_three_surface_asks() {
     let mut s = build_session();
     s.start_new_game();
