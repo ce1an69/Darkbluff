@@ -1,0 +1,7 @@
+[package]
+name = "darkbluff-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+darkbluff-core = { path = "../darkbluff-core" }

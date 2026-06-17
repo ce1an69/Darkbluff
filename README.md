@@ -27,16 +27,20 @@ Rust · serde/JSON · YAML(serde_yml) · pulldown-cmark · clap · tracing · di
 
 ## 项目结构
 
+Cargo workspace,三个 crate 严格单向依赖(`binary → core ← tui`):
+
 ```
-src/
-├── content/   # 内容引擎（模型/加载/校验/查询,无状态）
-├── save/      # 存档系统（原子写/检查点回滚/快照/迁移）
-├── engine/    # 游戏引擎（条件求值/指令解析/状态机/审判推进）
-├── cli.rs     # CLI（check 实装）
-└── log.rs     # 日志（check→stderr,play→文件）
-docs/          # 设计文档
-tests/fixtures/data/  # 测试数据集
+crates/
+├── darkbluff-core/   # 核心库:内容/存档/引擎(渲染无关,可无终端测试)
+│   ├── src/{content,save,engine} + world.rs/error.rs
+│   └── tests/        # 含 fixtures/data 测试数据集
+├── darkbluff/        # 二进制:CLI 装配 + play/check 分发
+└── darkbluff-tui/    # 渲染层(占位,实装时只依赖 core 公共契约)
+docs/                 # 设计文档
 ```
+
+**依赖方向由 Cargo 强制**:core 不含 clap/ratatui;`darkbluff check` 无需编译 TUI 重依赖。
+
 
 ## License
 

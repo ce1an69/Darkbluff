@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use darkbluff::content::{check, ContentEngine, FilesystemSource};
-use darkbluff::engine::{Input, Outcome, Selection, Session, SessionState};
-use darkbluff::save::{FakeClock, SaveStore};
+use darkbluff_core::content::{check, ContentEngine, FilesystemSource};
+use darkbluff_core::engine::{Input, Outcome, Selection, Session, SessionState};
+use darkbluff_core::save::{FakeClock, SaveStore};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -191,7 +191,7 @@ fn persistence_survives_reload() {
     // 重新加载
     let store = SaveStore::open(dir, Box::new(FakeClock::new())).unwrap();
     match store.load().unwrap() {
-        darkbluff::save::LoadResult::Save(loaded, _) => {
+        darkbluff_core::save::LoadResult::Save(loaded, _) => {
             assert!(loaded.has_clue("the_missing_butcher", "wolf_alibi"));
             assert_eq!(loaded.current_chapter, "the_missing_butcher");
         }

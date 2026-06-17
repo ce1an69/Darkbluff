@@ -1,6 +1,6 @@
 //! 启动校验（checker）的集成测试。
 
-use darkbluff::content::{check, CheckReport, ContentEngine, InMemorySource, Severity};
+use darkbluff_core::content::{check, CheckReport, ContentEngine, InMemorySource, Severity};
 
 /// 一个最小且合法的数据集，期望 0 error。
 fn valid_source() -> InMemorySource {

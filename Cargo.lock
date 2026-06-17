@@ -188,8 +188,19 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 name = "darkbluff"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "clap",
+ "darkbluff-core",
+ "dirs",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "darkbluff-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
  "dirs",
  "pulldown-cmark",
  "serde",
@@ -197,8 +208,13 @@ dependencies = [
  "serde_yml",
  "thiserror",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
+]
+
+[[package]]
+name = "darkbluff-tui"
+version = "0.1.0"
+dependencies = [
+ "darkbluff-core",
 ]
 
 [[package]]

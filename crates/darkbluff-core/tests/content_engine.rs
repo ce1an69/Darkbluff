@@ -2,8 +2,8 @@
 
 use std::collections::HashSet;
 
-use darkbluff::content::{ContentEngine, InMemorySource};
-use darkbluff::world::World;
+use darkbluff_core::content::{ContentEngine, InMemorySource};
+use darkbluff_core::world::World;
 
 fn sample_source() -> InMemorySource {
     InMemorySource::new()

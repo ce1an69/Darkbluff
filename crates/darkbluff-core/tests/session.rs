@@ -2,10 +2,10 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use darkbluff::content::{ContentEngine, InMemorySource};
-use darkbluff::engine::{Input, Outcome, Selection, Session, SessionState};
-use darkbluff::save::{CheckpointKind, FakeClock, SaveStore};
-use darkbluff::world::World;
+use darkbluff_core::content::{ContentEngine, InMemorySource};
+use darkbluff_core::engine::{Input, Outcome, Selection, Session, SessionState};
+use darkbluff_core::save::{CheckpointKind, FakeClock, SaveStore};
+use darkbluff_core::world::World;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 

@@ -27,16 +27,20 @@ YAML + Markdown data-driven content, fully separated from code. `include_dir` em
 
 ## Project Layout
 
+Cargo workspace with three crates in a strict one-way DAG (`binary → core ← tui`):
+
 ```
-src/
-├── content/   # Content engine (models/loader/checker/queries, stateless)
-├── save/      # Save system (atomic writes/checkpoint rollback/snapshots/migration)
-├── engine/    # Game engine (condition eval/command parsing/state machine/judgment flow)
-├── cli.rs     # CLI (check subcommand)
-└── log.rs     # Logging (check→stderr, play→file)
-docs/          # Design documents
-tests/fixtures/data/  # Test dataset
+crates/
+├── darkbluff-core/   # Core lib: content/save/engine (render-agnostic, testable headless)
+│   ├── src/{content,save,engine} + world.rs/error.rs
+│   └── tests/        # includes fixtures/data test dataset
+├── darkbluff/        # Binary: CLI wiring + play/check dispatch
+└── darkbluff-tui/    # Render layer (stub; will depend only on core's public contract)
+docs/                 # Design documents
 ```
+
+The dependency direction is enforced by Cargo: core has no clap/ratatui, and `darkbluff check` compiles without TUI heavy deps.
+
 
 ## License
 

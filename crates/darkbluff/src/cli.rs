@@ -10,8 +10,10 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::content::{check, ContentEngine, FilesystemSource};
-use crate::error::Result;
+use crate::log;
+
+use darkbluff_core::content::{check, ContentEngine, FilesystemSource};
+use darkbluff_core::error::Result;
 
 /// 命令行参数。
 #[derive(Parser, Debug)]
@@ -44,14 +46,14 @@ pub fn run() -> Result<()> {
     match cli.command.clone().unwrap_or(Command::Play) {
         Command::Play => {
             // play 模式日志写文件（TUI 用 alternate screen，不写 stderr）
-            if let Some(dir) = crate::log::default_log_dir() {
-                let _guard = crate::log::init_to_file(dir);
+            if let Some(dir) = log::default_log_dir() {
+                let _guard = log::init_to_file(dir);
                 return run_play(&cli);
             }
             run_play(&cli)
         }
         Command::Check => {
-            crate::log::init_to_stderr();
+            log::init_to_stderr();
             run_check(&cli)
         }
     }
@@ -85,7 +87,7 @@ fn validate_play_content(cli: &Cli) -> Result<()> {
         let errors = report.errors().count();
         let warnings = report.warnings().count();
         tracing::warn!(errors, warnings, "内容校验未通过，已阻止 play 启动");
-        return Err(crate::error::AppError::Content(format!(
+        return Err(darkbluff_core::error::AppError::Content(format!(
             "内容校验未通过：{errors} 个错误，{warnings} 个警告。请先运行 darkbluff check --data-dir {}",
             data_dir.display()
         )));
