@@ -1,7 +1,7 @@
 //! Darkbluff 二进制入口。
 //!
 //! 装配 [`darkbluff_core`] 引擎与 CLI，分发 `play`/`check` 子命令。
-//! TUI 渲染层（`darkbluff-tui`）尚未接入；`play` 当前打印提示后退出。
+//! TUI 渲染层由 `darkbluff-tui` crate 提供。
 
 mod cli;
 mod log;

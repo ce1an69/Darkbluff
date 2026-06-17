@@ -1,9 +1,9 @@
 //! CLI 参数解析与子命令分发。
 //!
 //! 设计见 docs/architecture.md「CLI 与运行模式」。
-//! - `darkbluff` / `darkbluff play`：进入游戏（TUI 暂未实现，当前打印提示后退出）。
+//! - `darkbluff` / `darkbluff play`：进入游戏。
 //! - `darkbluff check`：离线校验 `data/` 内容，不启动 TUI。
-//! - `--no-motion`：本次运行关闭过渡动画（TUI 实装后生效）。
+//! - `--no-motion`：本次运行关闭过渡动画。
 //! - `--data-dir <path>`：覆盖内容数据目录（默认当前目录下的 `data/`）。
 
 use std::path::PathBuf;
@@ -12,8 +12,8 @@ use clap::{Parser, Subcommand};
 
 use crate::log;
 
-use darkbluff_core::content::{check, ContentEngine, FilesystemSource};
-use darkbluff_core::error::Result;
+use darkbluff_core::content::{ContentEngine, FilesystemSource, check};
+use darkbluff_core::error::{AppError, Result};
 
 /// 命令行参数。
 #[derive(Parser, Debug)]
@@ -24,7 +24,6 @@ pub struct Cli {
 
     /// 本次运行关闭过渡动画（临时，不写设置文件；TUI 实装后生效）
     #[arg(long, global = true)]
-    #[allow(dead_code)]
     no_motion: bool,
 
     /// 指定内容数据目录（默认 ./data）
@@ -68,16 +67,23 @@ fn resolve_data_dir(cli: &Cli) -> Result<PathBuf> {
 }
 
 fn run_play(cli: &Cli) -> Result<()> {
-    validate_play_content(cli)?;
-    // TUI 渲染层（ui/）暂未实现。
-    eprintln!("DarkBluff TUI 尚未实现。当前可用子命令：darkbluff check --data-dir <path>");
-    Ok(())
+    let engine = load_checked_engine(cli)?;
+    darkbluff_tui::run(
+        engine,
+        darkbluff_tui::TuiOptions {
+            no_motion: cli.no_motion,
+            save_dir: None,
+        },
+    )
 }
 
-fn validate_play_content(cli: &Cli) -> Result<()> {
+fn load_checked_engine(cli: &Cli) -> Result<ContentEngine> {
     let data_dir = resolve_data_dir(cli)?;
     if cli.data_dir.is_none() && !data_dir.exists() {
-        return Ok(());
+        return Err(AppError::Content(format!(
+            "默认内容目录不存在：{}。当前仓库尚未包含正式 data/，请使用 --data-dir 指向内容目录，例如 crates/darkbluff-core/tests/fixtures/data",
+            data_dir.display()
+        )));
     }
 
     let src = FilesystemSource::new(&data_dir)?;
@@ -92,7 +98,7 @@ fn validate_play_content(cli: &Cli) -> Result<()> {
             data_dir.display()
         )));
     }
-    Ok(())
+    Ok(engine)
 }
 
 fn run_check(cli: &Cli) -> Result<()> {
