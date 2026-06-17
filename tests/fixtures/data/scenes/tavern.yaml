@@ -1,0 +1,7 @@
+id: tavern
+name: "锈桶酒馆"
+connections:
+  - market
+description:
+  surface: text/scenes/tavern.surface.md
+  shadow: text/scenes/tavern.shadow.md

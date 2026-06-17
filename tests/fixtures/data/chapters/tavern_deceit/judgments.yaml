@@ -1,0 +1,3 @@
+- id: judge_wolf_deceit
+  target: wolf
+  result: results/final.md

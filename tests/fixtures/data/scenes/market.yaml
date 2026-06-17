@@ -1,0 +1,5 @@
+id: market
+name: "集市"
+description:
+  surface: text/scenes/market.surface.md
+  shadow: text/scenes/market.shadow.md

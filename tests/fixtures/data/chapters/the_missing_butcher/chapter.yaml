@@ -1,0 +1,44 @@
+id: the_missing_butcher
+title: "失踪的屠夫"
+order: 1
+intro: intro.md
+scenes:
+  - tavern
+  - market
+starting_scene: tavern
+characters:
+  - id: wolf
+    appears_in: [tavern]
+    topics:
+      - id: whereabouts
+        label: "昨晚的行踪"
+        available: true
+      - id: the_knife
+        label: "那把刀"
+        available: true
+      - id: secret
+        label: "隐藏的秘密"
+        available: false
+        unlock_after:
+          all_of:
+            - wolf_alibi
+            - crow_testimony
+  - id: crow
+    appears_in: [tavern]
+    topics:
+      - id: victim
+        label: "关于受害者"
+        available: true
+required_judgments: [judge_wolf]
+next:
+  default: tavern_deceit
+  branches:
+    - when:
+        all_of:
+          - judge_wolf
+          - judge_crow
+      target: tavern_truth
+    - when:
+        any_of:
+          - judge_wolf
+      target: tavern_deceit

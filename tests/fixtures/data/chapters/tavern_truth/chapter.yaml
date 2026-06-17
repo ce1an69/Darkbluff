@@ -1,0 +1,12 @@
+id: tavern_truth
+title: "酒馆真相"
+order: 2
+ending: true
+scenes:
+  - tavern
+starting_scene: tavern
+characters:
+  - id: wolf
+    topics: []
+required_judgments: [judge_wolf_truth]
+outro: outro.md

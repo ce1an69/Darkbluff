@@ -1,0 +1,114 @@
+//! 章节进入、自动推进与结局。
+//!
+//! 设计见 docs/data-formats.md「自动推进章节」、docs/narrative.md「终章结构」。
+//! 这些是 [`crate::engine::state::Session`] 的方法，按职责拆到此文件。
+
+use crate::engine::outcome::{AppState, Outcome};
+use crate::engine::state::Session;
+use crate::save::checkpoint;
+use crate::save::snapshot::intro_snapshot_path;
+use crate::world::World;
+
+impl Session {
+    /// 直接注入存档（继续游戏）。先做内容引用失效校验与回退，再恢复到 Exploring。
+    pub fn continue_with(&mut self, save: crate::save::Save) -> Outcome {
+        self.save = save;
+        self.pending = Default::default();
+        self.hints = Default::default();
+        let warnings = crate::engine::logic::reconcile_save(&mut self.save, &self.engine);
+        for w in &warnings {
+            tracing::warn!("存档回退: {w}");
+        }
+        self.state = AppState::Exploring;
+        let mut msgs = warnings;
+        msgs.extend(self.scene_description_messages());
+        Outcome::Show(msgs)
+    }
+
+    /// 开始新游戏：初始化首章。
+    pub fn start_new_game(&mut self) -> Outcome {
+        let first = match self.engine.first_chapter_id() {
+            Some(c) => c.to_string(),
+            None => return Outcome::Show(vec!["找不到首章（内容校验未通过）。".into()]),
+        };
+        let Some(ch) = self.engine.get_chapter(&first) else {
+            return Outcome::Show(vec!["首章数据缺失。".into()]);
+        };
+        if ch.starting_scene.is_empty() {
+            return Outcome::Show(vec!["首章缺少 starting_scene。".into()]);
+        }
+        match self.store.new_game(&first, &ch.starting_scene) {
+            Ok(save) => self.save = save,
+            Err(e) => return Outcome::Show(vec![format!("无法初始化新游戏：{e}")]),
+        }
+        self.pending = Default::default();
+        self.hints = Default::default();
+        self.enter_chapter(&first, false)
+    }
+
+    // ----- 章节进入 -----
+
+    pub(crate) fn enter_chapter(&mut self, chapter_id: &str, new_entry: bool) -> Outcome {
+        let Some(chapter) = self.engine.get_chapter(chapter_id).cloned() else {
+            return Outcome::Show(vec![format!("章节不存在：{chapter_id}")]);
+        };
+        if new_entry {
+            if self.save.chapter_path.last().map(|s| s.as_str()) != Some(chapter_id) {
+                self.save.chapter_path.push(chapter_id.into());
+            }
+            self.save.discovered.add_chapter(chapter_id);
+        }
+        self.save.current_chapter = chapter_id.into();
+        self.save.current_scene = chapter.starting_scene.clone();
+        self.save.current_world = World::Surface;
+
+        if let Some(text) = self.engine.get_intro_text(chapter_id).map(|s| s.to_string()) {
+            if !self.save.viewed_intros.contains_key(chapter_id) {
+                let rel = intro_snapshot_path(chapter_id);
+                let _ = self.store.snapshots().write(&rel, &text);
+                self.save.viewed_intros.insert(chapter_id.into(), rel);
+            }
+            self.pending.intro_needs_checkpoint = true;
+            self.state = AppState::ShowingIntro;
+            self.persist();
+            Outcome::Intro { text }
+        } else {
+            self.finalize_chapter_entry(true)
+        }
+    }
+
+    pub(crate) fn ack_intro(&mut self) -> Outcome {
+        let create = self.pending.intro_needs_checkpoint;
+        self.pending.intro_needs_checkpoint = false;
+        self.finalize_chapter_entry(create)
+    }
+
+    pub(crate) fn finalize_chapter_entry(&mut self, create_ckpt: bool) -> Outcome {
+        if create_ckpt {
+            let ch = self.save.current_chapter.clone();
+            let scene = self.save.current_scene.clone();
+            let world = self.save.current_world;
+            let now = self.store.clock().now_iso();
+            checkpoint::create_chapter_start(&mut self.save, &ch, &scene, world, &now);
+        }
+        self.state = AppState::Exploring;
+        self.persist();
+        Outcome::Show(self.scene_description_messages())
+    }
+
+    pub(crate) fn to_ending(&mut self) -> Outcome {
+        self.state = AppState::Ending;
+        self.ending_outcome()
+    }
+
+    pub(crate) fn ending_outcome(&self) -> Outcome {
+        let title = self
+            .engine
+            .get_chapter(&self.save.current_chapter)
+            .map(|c| c.title.clone())
+            .unwrap_or_default();
+        let total = self.engine.ending_chapter_ids().len();
+        let found = self.save.discovered.endings.len();
+        Outcome::Ending { title, found, total }
+    }
+}

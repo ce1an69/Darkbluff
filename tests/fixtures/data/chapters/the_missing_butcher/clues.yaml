@@ -1,0 +1,9 @@
+- id: wolf_alibi
+  source: wolf.whereabouts
+  world: surface
+- id: wolf_alibi_shadow
+  source: wolf.whereabouts
+  world: shadow
+- id: crow_testimony
+  source: crow.victim
+  world: surface

@@ -1,0 +1,6 @@
+- id: judge_wolf
+  target: wolf
+  result: results/wolf_trial.md
+- id: judge_crow
+  target: crow
+  result: results/crow_trial.md
