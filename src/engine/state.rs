@@ -1,6 +1,7 @@
 //! 会话状态机：[`Session`] 持有内容引擎、存档 store 与工作存档，通过 [`Input`] 驱动，
-//! 产出 [`Outcome`]。本模块只含类型定义、构造、主分发与共用小助手；各指令执行见
-//! [`crate::engine::handlers`]、章节进入/推进见 [`crate::engine::chapter_flow`]、
+//! 产出 [`Outcome`]。本模块只含类型定义、构造、主分发与共用小助手；指令执行见
+//! [`crate::engine::ask`] / [`crate::engine::judge`] / [`crate::engine::navigation`] /
+//! [`crate::engine::map`] / [`crate::engine::system`]，章节进入见 [`crate::engine::chapter_flow`]、
 //! 笔记见 [`crate::engine::note_view`]、新手引导见 [`crate::engine::hints`]。
 //!
 //! 设计见 docs/commands.md、docs/data-formats.md「自动推进章节」、
@@ -8,7 +9,9 @@
 
 use crate::content::ContentEngine;
 use crate::engine::commands::{help_for, help_overview, parse, ParseOutcome};
-use crate::engine::outcome::{AppState, Input, Outcome};
+use crate::engine::outcome::{
+    ConfirmationAction, Input, MenuKind, Message, Outcome, Selection, SessionState,
+};
 use crate::save::Save;
 use crate::save::SaveStore;
 
@@ -16,13 +19,35 @@ use crate::engine::hints::Hints;
 
 use crate::engine::outcome::MenuOption;
 
-/// 菜单态下的待定上下文。
-#[derive(Debug, Clone, Default)]
+/// 待定交互上下文。状态机负责控制何时消费这些上下文，渲染层只负责回传选择/确认。
+#[derive(Debug, Clone)]
 pub(crate) struct Pending {
-    pub(crate) ask_character: Option<String>,
-    pub(crate) menu: Option<Vec<crate::engine::outcome::MenuOption>>,
-    pub(crate) intro_needs_checkpoint: bool,
-    pub(crate) confirm_rollback_id: Option<String>,
+    pub(crate) action: PendingAction,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum PendingAction {
+    None,
+    Menu {
+        _kind: MenuKind,
+        options: Vec<MenuOption>,
+    },
+    AskTopic {
+        character: String,
+        options: Vec<MenuOption>,
+    },
+    Intro {
+        create_checkpoint: bool,
+    },
+    Confirm(ConfirmationAction),
+}
+
+impl Default for Pending {
+    fn default() -> Self {
+        Self {
+            action: PendingAction::None,
+        }
+    }
 }
 
 /// 游戏会话。
@@ -30,7 +55,7 @@ pub struct Session {
     pub(crate) engine: ContentEngine,
     pub(crate) store: SaveStore,
     pub(crate) save: Save,
-    pub(crate) state: AppState,
+    pub(crate) state: SessionState,
     pub(crate) pending: Pending,
     pub(crate) hints: Hints,
 }
@@ -41,7 +66,7 @@ impl Session {
             engine,
             store,
             save: Save::default(),
-            state: AppState::Title,
+            state: SessionState::Title,
             pending: Pending::default(),
             hints: Hints::default(),
         }
@@ -50,13 +75,10 @@ impl Session {
     pub fn engine(&self) -> &ContentEngine {
         &self.engine
     }
-    pub fn store(&self) -> &SaveStore {
-        &self.store
-    }
     pub fn save(&self) -> &Save {
         &self.save
     }
-    pub fn state(&self) -> &AppState {
+    pub fn state(&self) -> &SessionState {
         &self.state
     }
 
@@ -89,22 +111,35 @@ impl Session {
     }
     /// 持久化并返回是否成功（`do_quit` 用：失败则不退出）。
     pub(crate) fn try_persist(&self) -> bool {
-        self.store.save(&self.save).map_err(|e| tracing::error!("存档保存失败: {e}")).is_ok()
+        self.store
+            .save(&self.save)
+            .map_err(|e| tracing::error!("存档保存失败: {e}"))
+            .is_ok()
     }
 
     /// 进入标题界面：构建新游戏/继续/退出菜单，附带探索进度。
     fn enter_title(&mut self) -> Outcome {
-        self.state = AppState::Title;
+        self.state = SessionState::Title;
         let found = self.save.discovered.endings.len();
         let total = self.engine.ending_chapter_ids().len();
-        let mut options = vec![MenuOption { id: "new_game".into(), label: "新游戏".into() }];
+        let mut options = vec![MenuOption {
+            id: "new_game".into(),
+            label: "新游戏".into(),
+        }];
         if self.store.has_save() {
-            options.push(MenuOption { id: "continue".into(), label: "继续".into() });
+            options.push(MenuOption {
+                id: "continue".into(),
+                label: "继续".into(),
+            });
         }
-        options.push(MenuOption { id: "quit".into(), label: "退出".into() });
-        self.pending.menu = Some(options.clone());
-        Outcome::Menu {
-            title: format!("Darkbluff — 已发现结局 {found}/{total}"),
+        options.push(MenuOption {
+            id: "quit".into(),
+            label: "退出".into(),
+        });
+        self.set_menu(MenuKind::Title, options.clone());
+        Outcome::MenuRequested {
+            kind: MenuKind::Title,
+            prompt: format!("Darkbluff — 已发现结局 {found}/{total}"),
             options,
         }
     }
@@ -113,32 +148,32 @@ impl Session {
 
     pub fn handle(&mut self, input: Input) -> Outcome {
         match (&self.state.clone(), input) {
-            (AppState::ShowingIntro, Input::Ack) | (AppState::ShowingIntro, Input::Cancel) => {
-                self.ack_intro()
-            }
-            (AppState::ShowingIntro, _) => Outcome::Ignored,
+            (SessionState::ShowingIntro, Input::Ack)
+            | (SessionState::ShowingIntro, Input::Cancel) => self.ack_intro(),
+            (SessionState::ShowingIntro, _) => Outcome::Ignored,
 
-            (AppState::ShowingOutro, Input::Ack) | (AppState::ShowingOutro, Input::Cancel) => {
-                self.to_ending()
-            }
-            (AppState::ShowingOutro, _) => Outcome::Ignored,
+            (SessionState::ShowingOutro, Input::Ack)
+            | (SessionState::ShowingOutro, Input::Cancel) => self.to_ending(),
+            (SessionState::ShowingOutro, _) => Outcome::Ignored,
 
-            (AppState::Ending, Input::Ack) | (AppState::Ending, Input::Cancel) => {
+            (SessionState::Ending, Input::Ack) | (SessionState::Ending, Input::Cancel) => {
                 self.enter_title()
             }
-            (AppState::Ending, _) => Outcome::Ignored,
+            (SessionState::Ending, _) => Outcome::Ignored,
 
             // 标题界面：新游戏 / 继续 / 退出
-            (AppState::Title, Input::Pick(i)) => {
-                if self.pending.menu.is_none() {
+            (SessionState::Title, Input::Select(selection)) => {
+                if !self.has_pending_menu() {
                     self.enter_title()
                 } else {
-                    match self.menu_id(i).as_deref() {
+                    match self.selection_id(&selection).as_deref() {
                         Some("new_game") => {
                             if self.store.has_save() {
-                                self.pending.confirm_rollback_id = Some("new_game".into());
-                                self.state = AppState::Confirming;
-                                Outcome::Confirm {
+                                self.pending.action =
+                                    PendingAction::Confirm(ConfirmationAction::NewGame);
+                                self.state = SessionState::Confirming;
+                                Outcome::ConfirmationRequested {
+                                    action: ConfirmationAction::NewGame,
                                     prompt: "已有存档，新游戏将覆盖。确认？".into(),
                                 }
                             } else {
@@ -149,117 +184,164 @@ impl Session {
                             Ok(crate::save::LoadResult::Save(save, report)) => {
                                 let mut outcome = self.continue_with(save);
                                 for w in report.warning_messages() {
-                                    if let Outcome::Show(ref mut msgs) = outcome {
-                                        msgs.insert(0, w);
+                                    if let Outcome::Message(ref mut message) = outcome {
+                                        message.lines.insert(0, w);
                                     }
                                 }
                                 outcome
                             }
-                            _ => Outcome::Show(vec!["存档加载失败。".into()]),
-                        }
+                            _ => Outcome::Message(Message::error(vec!["存档加载失败。".into()])),
+                        },
                         Some("quit") => self.do_quit(),
                         _ => self.enter_title(),
                     }
                 }
             }
-            (AppState::Title, _) => {
-                if self.pending.menu.is_none() {
+            (SessionState::Title, _) => {
+                if !self.has_pending_menu() {
                     self.enter_title()
                 } else {
                     Outcome::Ignored
                 }
             }
 
-            // 破坏性操作确认（复用 confirm_rollback_id：new_game 或 checkpoint 回滚）
-            (AppState::Confirming, Input::Confirm(true)) => {
-                if self.pending.confirm_rollback_id.as_deref() == Some("new_game") {
-                    self.pending.confirm_rollback_id = None;
+            (SessionState::Confirming, Input::Confirm(true)) => match self.pending.action.clone() {
+                PendingAction::Confirm(ConfirmationAction::NewGame) => {
+                    self.pending.action = PendingAction::None;
                     self.start_new_game()
-                } else {
-                    self.execute_rollback_confirm()
                 }
-            }
-            (AppState::Confirming, Input::Confirm(false)) | (AppState::Confirming, Input::Cancel) => {
-                let was_title = self.pending.confirm_rollback_id.as_deref() == Some("new_game");
-                self.pending.confirm_rollback_id = None;
+                PendingAction::Confirm(ConfirmationAction::Rollback { checkpoint_id }) => {
+                    self.pending.action = PendingAction::None;
+                    self.execute_rollback_confirm(&checkpoint_id)
+                }
+                _ => {
+                    self.state = SessionState::Exploring;
+                    Outcome::Message(Message::error(vec!["无效确认。".into()]))
+                }
+            },
+            (SessionState::Confirming, Input::Confirm(false))
+            | (SessionState::Confirming, Input::Cancel) => {
+                let was_title = matches!(
+                    self.pending.action,
+                    PendingAction::Confirm(ConfirmationAction::NewGame)
+                );
+                self.pending.action = PendingAction::None;
                 if was_title {
                     self.enter_title()
                 } else {
-                    self.state = AppState::Exploring;
-                    Outcome::Show(vec!["已取消。".into()])
+                    self.state = SessionState::Exploring;
+                    Outcome::Message(Message::info(vec!["已取消。".into()]))
                 }
             }
 
-            (AppState::Exploring, Input::Text(line)) => self.handle_command(&line),
-            (AppState::Exploring, _) => Outcome::Ignored,
+            (SessionState::Exploring, Input::Text(line)) => self.handle_command(&line),
+            (SessionState::Exploring, _) => Outcome::Ignored,
 
-            (AppState::ChoosingAskCharacter, Input::Pick(i)) => self.pick_menu(i, |s, id| s.do_ask(Some(id), None)),
-            (AppState::ChoosingAskCharacter, Input::Cancel) => self.cancel_menu(),
+            (SessionState::ChoosingAskCharacter, Input::Select(selection)) => {
+                self.pick_menu(&selection, |s, id| s.do_ask(Some(id), None))
+            }
+            (SessionState::ChoosingAskCharacter, Input::Cancel) => self.cancel_menu(),
 
-            (AppState::ChoosingAskTopic, Input::Pick(i)) => {
-                let ch = self.pending.ask_character.clone();
-                let id = self.menu_id(i);
+            (SessionState::ChoosingAskTopic, Input::Select(selection)) => {
+                let ch = match &self.pending.action {
+                    PendingAction::AskTopic { character, .. } => Some(character.clone()),
+                    _ => None,
+                };
+                let id = self.selection_id(&selection);
                 match (ch, id) {
                     (Some(c), Some(t)) => self.ask_topic(&c, &t),
-                    _ => Outcome::Show(vec!["无效选择。".into()]),
+                    _ => Outcome::Message(Message::error(vec!["无效选择。".into()])),
                 }
             }
-            (AppState::ChoosingAskTopic, Input::Cancel) => self.cancel_menu(),
+            (SessionState::ChoosingAskTopic, Input::Cancel) => self.cancel_menu(),
 
-            (AppState::ChoosingJudgeCharacter, Input::Pick(i)) => {
-                self.pick_menu(i, |s, id| s.do_judge(Some(id)))
+            (SessionState::ChoosingJudgeCharacter, Input::Select(selection)) => {
+                self.pick_menu(&selection, |s, id| s.do_judge(Some(id)))
             }
-            (AppState::ChoosingJudgeCharacter, Input::Cancel) => self.cancel_menu(),
+            (SessionState::ChoosingJudgeCharacter, Input::Cancel) => self.cancel_menu(),
 
-            (AppState::ChoosingMove, Input::Pick(i)) => self.pick_menu(i, |s, id| s.do_move(Some(id))),
-            (AppState::ChoosingMove, Input::Cancel) => self.cancel_menu(),
+            (SessionState::ChoosingMove, Input::Select(selection)) => {
+                self.pick_menu(&selection, |s, id| s.do_move(Some(id)))
+            }
+            (SessionState::ChoosingMove, Input::Cancel) => self.cancel_menu(),
 
-            (AppState::ChoosingCheckpoint, Input::Pick(i)) => {
-                if let Some(id) = self.menu_id(i) {
-                    self.pending.confirm_rollback_id = Some(id);
-                    self.state = AppState::Confirming;
-                    Outcome::Confirm {
-                        prompt: "回滚会丢弃该 checkpoint 之后的当前流程进度，discovered 保留。确认？".into(),
+            (SessionState::ChoosingCheckpoint, Input::Select(selection)) => {
+                if let Some(id) = self.selection_id(&selection) {
+                    let action = ConfirmationAction::Rollback { checkpoint_id: id };
+                    self.pending.action = PendingAction::Confirm(action.clone());
+                    self.state = SessionState::Confirming;
+                    Outcome::ConfirmationRequested {
+                        action,
+                        prompt:
+                            "回滚会丢弃该 checkpoint 之后的当前流程进度，discovered 保留。确认？"
+                                .into(),
                     }
                 } else {
-                    Outcome::Show(vec!["无效选择。".into()])
+                    Outcome::Message(Message::error(vec!["无效选择。".into()]))
                 }
             }
-            (AppState::ChoosingCheckpoint, Input::Cancel) => self.cancel_menu(),
+            (SessionState::ChoosingCheckpoint, Input::Cancel) => self.cancel_menu(),
 
             // 菜单态下其余输入静默忽略（须先 Esc 退出菜单）
             #[allow(unreachable_patterns)]
-            (_, Input::Pick(_)) | (_, Input::Cancel) | (_, Input::Confirm(_)) | (_, Input::Ack) => {
-                Outcome::Ignored
-            }
+            (_, Input::Select(_))
+            | (_, Input::Cancel)
+            | (_, Input::Confirm(_))
+            | (_, Input::Ack) => Outcome::Ignored,
             (_, Input::Text(_)) => Outcome::Ignored,
         }
     }
 
-    /// 取菜单第 i 项的 id，存在则执行 `f`，否则提示无效选择。
-    fn pick_menu<F>(&mut self, i: usize, f: F) -> Outcome
+    /// 取菜单选择的 id，存在则执行 `f`，否则提示无效选择。
+    fn pick_menu<F>(&mut self, selection: &Selection, f: F) -> Outcome
     where
         F: FnOnce(&mut Session, String) -> Outcome,
     {
-        match self.menu_id(i) {
+        match self.selection_id(selection) {
             Some(id) => f(self, id),
-            None => Outcome::Show(vec!["无效选择。".into()]),
+            None => Outcome::Message(Message::error(vec!["无效选择。".into()])),
         }
     }
 
-    pub(crate) fn menu_id(&mut self, i: usize) -> Option<String> {
-        self.pending
-            .menu
-            .as_ref()
-            .and_then(|opts| opts.get(i))
-            .map(|o| o.id.clone())
+    pub(crate) fn set_menu(&mut self, kind: MenuKind, options: Vec<MenuOption>) {
+        self.pending.action = PendingAction::Menu {
+            _kind: kind,
+            options,
+        };
+    }
+
+    pub(crate) fn set_ask_topic_menu(&mut self, character: String, options: Vec<MenuOption>) {
+        self.pending.action = PendingAction::AskTopic { character, options };
+    }
+
+    pub(crate) fn set_intro_pending(&mut self, create_checkpoint: bool) {
+        self.pending.action = PendingAction::Intro { create_checkpoint };
+    }
+
+    fn has_pending_menu(&self) -> bool {
+        matches!(
+            self.pending.action,
+            PendingAction::Menu { .. } | PendingAction::AskTopic { .. }
+        )
+    }
+
+    pub(crate) fn selection_id(&self, selection: &Selection) -> Option<String> {
+        let options = match &self.pending.action {
+            PendingAction::Menu { options, .. } | PendingAction::AskTopic { options, .. } => {
+                options
+            }
+            _ => return None,
+        };
+        match selection {
+            Selection::Index(i) => options.get(*i).map(|o| o.id.clone()),
+            Selection::Id(id) => options.iter().find(|o| o.id == *id).map(|o| o.id.clone()),
+        }
     }
 
     pub(crate) fn cancel_menu(&mut self) -> Outcome {
-        self.pending.menu = None;
-        self.pending.ask_character = None;
-        self.state = AppState::Exploring;
-        Outcome::Show(vec!["已取消。".into()])
+        self.pending.action = PendingAction::None;
+        self.state = SessionState::Exploring;
+        Outcome::Message(Message::info(vec!["已取消。".into()]))
     }
 
     // ----- 指令解析分发 -----
@@ -268,11 +350,11 @@ impl Session {
         use crate::engine::commands::Command::*;
         match parse(line) {
             ParseOutcome::Empty => Outcome::Ignored,
-            ParseOutcome::Unknown(s) => Outcome::Show(vec![format!(
+            ParseOutcome::Unknown(s) => Outcome::Message(Message::error(vec![format!(
                 "未知指令：{s}。输入 help 查看可用指令。"
-            )]),
+            )])),
             ParseOutcome::TooManyArguments(_) => {
-                Outcome::Show(vec!["该指令不需要参数。".into()])
+                Outcome::Message(Message::info(vec!["该指令不需要参数。".into()]))
             }
             ParseOutcome::Ok(cmd) => match cmd {
                 Ask { target, topic } => self.do_ask(target, topic),
@@ -289,12 +371,12 @@ impl Session {
 
     fn do_help(cmd: Option<String>) -> Outcome {
         match cmd {
-            None => Outcome::Show(help_overview()),
+            None => Outcome::Message(Message::info(help_overview())),
             Some(c) => match help_for(&c) {
-                Some(lines) => Outcome::Show(lines),
-                None => Outcome::Show(vec![format!(
+                Some(lines) => Outcome::Message(Message::info(lines)),
+                None => Outcome::Message(Message::error(vec![format!(
                     "未知指令：{c}。输入 help 查看可用指令。"
-                )]),
+                )])),
             },
         }
     }

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use darkbluff::content::{check, ContentEngine, FilesystemSource};
-use darkbluff::engine::{AppState, Input, Outcome, Session};
+use darkbluff::engine::{Input, Outcome, Selection, Session, SessionState};
 use darkbluff::save::{FakeClock, SaveStore};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -22,7 +22,8 @@ fn temp_save_dir(tag: &str) -> PathBuf {
 fn new_session(tag: &str) -> Session {
     let src = FilesystemSource::new(fixture_dir()).expect("fixture dir");
     let engine = ContentEngine::load(&src).expect("load");
-    let store = SaveStore::open(temp_save_dir(tag), Box::new(FakeClock::new())).expect("open store");
+    let store =
+        SaveStore::open(temp_save_dir(tag), Box::new(FakeClock::new())).expect("open store");
     Session::new(engine, store)
 }
 
@@ -38,13 +39,13 @@ fn fixture_passes_check() {
 #[test]
 fn new_game_intro_then_exploring() {
     let mut s = new_session("intro");
-    assert!(matches!(s.start_new_game(), Outcome::Intro { .. }));
-    assert_eq!(*s.state(), AppState::ShowingIntro);
+    assert!(matches!(s.start_new_game(), Outcome::ChapterIntro { .. }));
+    assert_eq!(*s.state(), SessionState::ShowingIntro);
     match s.handle(Input::Ack) {
-        Outcome::Show(msgs) => assert!(msgs.join("").contains("酒馆")),
+        Outcome::Message(message) => assert!(message.lines.join("").contains("酒馆")),
         o => panic!("expected show, got {:?}", o),
     }
-    assert_eq!(*s.state(), AppState::Exploring);
+    assert_eq!(*s.state(), SessionState::Exploring);
 }
 
 #[test]
@@ -55,7 +56,7 @@ fn ask_collects_clue_and_unlocks_secret() {
 
     // secret 初始不可问
     match s.handle(Input::Text("ask wolf secret".into())) {
-        Outcome::Show(m) => assert_eq!(m[0], "你还没有足够线索。"),
+        Outcome::Message(message) => assert_eq!(message.lines[0], "你还没有足够线索。"),
         o => panic!("got {:?}", o),
     }
 
@@ -81,7 +82,9 @@ fn gaze_switches_world_and_collects_shadow_clue() {
     s.handle(Input::Text("gaze".into()));
     // 影子侧问 whereabouts → 收集 wolf_alibi_shadow
     s.handle(Input::Text("ask wolf whereabouts".into()));
-    assert!(s.save().has_clue("the_missing_butcher", "wolf_alibi_shadow"));
+    assert!(s
+        .save()
+        .has_clue("the_missing_butcher", "wolf_alibi_shadow"));
 }
 
 #[test]
@@ -98,11 +101,15 @@ fn judging_crow_then_wolf_reaches_truth_ending() {
     // 再审 wolf → 必要审判完成 → 命中 all_of(both) → tavern_truth
     s.handle(Input::Text("judge wolf".into()));
     assert_eq!(s.save().current_chapter, "tavern_truth");
-    assert!(s.save().discovered.chapters.contains(&"tavern_truth".to_string()));
+    assert!(s
+        .save()
+        .discovered
+        .chapters
+        .contains(&"tavern_truth".to_string()));
 
     // 终章审判 → 结局（有 outro）→ ShowingOutro
     s.handle(Input::Text("judge wolf".into()));
-    assert_eq!(*s.state(), AppState::ShowingOutro);
+    assert_eq!(*s.state(), SessionState::ShowingOutro);
     assert!(s
         .save()
         .discovered
@@ -111,13 +118,13 @@ fn judging_crow_then_wolf_reaches_truth_ending() {
 
     // 确认结局 → Ending
     match s.handle(Input::Ack) {
-        Outcome::Ending { found, total, .. } => {
+        Outcome::EndingReached { found, total, .. } => {
             assert_eq!(found, 1);
             assert_eq!(total, 2);
         }
         o => panic!("expected ending, got {:?}", o),
     }
-    assert_eq!(*s.state(), AppState::Ending);
+    assert_eq!(*s.state(), SessionState::Ending);
 }
 
 #[test]
@@ -143,16 +150,16 @@ fn map_rollback_before_judgment_undoes_judgment() {
 
     // map → 菜单（chapter_start + before_judgment 两个检查点）
     match s.handle(Input::Text("map".into())) {
-        Outcome::Menu { options, .. } => assert_eq!(options.len(), 2),
+        Outcome::MenuRequested { options, .. } => assert_eq!(options.len(), 2),
         o => panic!("got {:?}", o),
     }
     // 列表顺序：[chapter_start, before_judgment]，故 before_judgment = Pick(1)
-    match s.handle(Input::Pick(1)) {
-        Outcome::Confirm { .. } => {}
+    match s.handle(Input::Select(Selection::Index(1))) {
+        Outcome::ConfirmationRequested { .. } => {}
         o => panic!("got {:?}", o),
     }
     match s.handle(Input::Confirm(true)) {
-        Outcome::Show(_) => {}
+        Outcome::Message(_) => {}
         o => panic!("got {:?}", o),
     }
     // 审判已被撤销

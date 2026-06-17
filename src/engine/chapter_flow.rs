@@ -3,7 +3,7 @@
 //! 设计见 docs/data-formats.md「自动推进章节」、docs/narrative.md「终章结构」。
 //! 这些是 [`crate::engine::state::Session`] 的方法，按职责拆到此文件。
 
-use crate::engine::outcome::{AppState, Outcome};
+use crate::engine::outcome::{Message, Outcome, SessionState};
 use crate::engine::state::Session;
 use crate::save::checkpoint;
 use crate::save::snapshot::intro_snapshot_path;
@@ -19,27 +19,33 @@ impl Session {
         for w in &warnings {
             tracing::warn!("存档回退: {w}");
         }
-        self.state = AppState::Exploring;
+        self.state = SessionState::Exploring;
         let mut msgs = warnings;
         msgs.extend(self.scene_description_messages());
-        Outcome::Show(msgs)
+        Outcome::Message(Message::info(msgs))
     }
 
     /// 开始新游戏：初始化首章。
     pub fn start_new_game(&mut self) -> Outcome {
         let first = match self.engine.first_chapter_id() {
             Some(c) => c.to_string(),
-            None => return Outcome::Show(vec!["找不到首章（内容校验未通过）。".into()]),
+            None => {
+                return Outcome::Message(Message::info(vec![
+                    "找不到首章（内容校验未通过）。".into()
+                ]))
+            }
         };
         let Some(ch) = self.engine.get_chapter(&first) else {
-            return Outcome::Show(vec!["首章数据缺失。".into()]);
+            return Outcome::Message(Message::info(vec!["首章数据缺失。".into()]));
         };
         if ch.starting_scene.is_empty() {
-            return Outcome::Show(vec!["首章缺少 starting_scene。".into()]);
+            return Outcome::Message(Message::info(vec!["首章缺少 starting_scene。".into()]));
         }
         match self.store.new_game(&first, &ch.starting_scene) {
             Ok(save) => self.save = save,
-            Err(e) => return Outcome::Show(vec![format!("无法初始化新游戏：{e}")]),
+            Err(e) => {
+                return Outcome::Message(Message::info(vec![format!("无法初始化新游戏：{e}")]))
+            }
         }
         self.pending = Default::default();
         self.hints = Default::default();
@@ -50,7 +56,7 @@ impl Session {
 
     pub(crate) fn enter_chapter(&mut self, chapter_id: &str, new_entry: bool) -> Outcome {
         let Some(chapter) = self.engine.get_chapter(chapter_id).cloned() else {
-            return Outcome::Show(vec![format!("章节不存在：{chapter_id}")]);
+            return Outcome::Message(Message::info(vec![format!("章节不存在：{chapter_id}")]));
         };
         if new_entry {
             if self.save.chapter_path.last().map(|s| s.as_str()) != Some(chapter_id) {
@@ -62,7 +68,11 @@ impl Session {
         self.save.current_scene = chapter.starting_scene.clone();
         self.save.current_world = World::Surface;
 
-        if let Some(text) = self.engine.get_intro_text(chapter_id).map(|s| s.to_string()) {
+        if let Some(text) = self
+            .engine
+            .get_intro_text(chapter_id)
+            .map(|s| s.to_string())
+        {
             if !self.save.viewed_intros.contains_key(chapter_id) {
                 let rel = intro_snapshot_path(chapter_id);
                 match self.store.snapshots().write(&rel, &text) {
@@ -74,18 +84,21 @@ impl Session {
                     }
                 }
             }
-            self.pending.intro_needs_checkpoint = true;
-            self.state = AppState::ShowingIntro;
+            self.set_intro_pending(true);
+            self.state = SessionState::ShowingIntro;
             self.persist();
-            Outcome::Intro { text }
+            Outcome::ChapterIntro { text }
         } else {
             self.finalize_chapter_entry(true)
         }
     }
 
     pub(crate) fn ack_intro(&mut self) -> Outcome {
-        let create = self.pending.intro_needs_checkpoint;
-        self.pending.intro_needs_checkpoint = false;
+        let create = match self.pending.action {
+            crate::engine::state::PendingAction::Intro { create_checkpoint } => create_checkpoint,
+            _ => false,
+        };
+        self.pending.action = crate::engine::state::PendingAction::None;
         self.finalize_chapter_entry(create)
     }
 
@@ -97,13 +110,13 @@ impl Session {
             let now = self.store.clock().now_iso();
             checkpoint::create_chapter_start(&mut self.save, &ch, &scene, world, &now);
         }
-        self.state = AppState::Exploring;
+        self.state = SessionState::Exploring;
         self.persist();
-        Outcome::Show(self.scene_description_messages())
+        Outcome::Message(Message::info(self.scene_description_messages()))
     }
 
     pub(crate) fn to_ending(&mut self) -> Outcome {
-        self.state = AppState::Ending;
+        self.state = SessionState::Ending;
         self.ending_outcome()
     }
 
@@ -115,6 +128,10 @@ impl Session {
             .unwrap_or_default();
         let total = self.engine.ending_chapter_ids().len();
         let found = self.save.discovered.endings.len();
-        Outcome::Ending { title, found, total }
+        Outcome::EndingReached {
+            title,
+            found,
+            total,
+        }
     }
 }

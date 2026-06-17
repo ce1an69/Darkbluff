@@ -3,8 +3,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use darkbluff::content::{ContentEngine, InMemorySource};
-use darkbluff::engine::{AppState, Input, Outcome, Session};
-use darkbluff::save::{FakeClock, SaveStore, CheckpointKind};
+use darkbluff::engine::{Input, Outcome, Selection, Session, SessionState};
+use darkbluff::save::{CheckpointKind, FakeClock, SaveStore};
 use darkbluff::world::World;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -41,16 +41,20 @@ fn build_session() -> Session {
 fn new_game_shows_intro_then_exploring() {
     let mut s = build_session();
     match s.start_new_game() {
-        Outcome::Intro { text } => assert!(text.contains("首章开场")),
+        Outcome::ChapterIntro { text } => assert!(text.contains("首章开场")),
         o => panic!("expected intro, got {:?}", o),
     }
-    assert_eq!(*s.state(), AppState::ShowingIntro);
+    assert_eq!(*s.state(), SessionState::ShowingIntro);
     match s.handle(Input::Ack) {
-        Outcome::Show(msgs) => assert!(msgs.join("").contains("酒馆")),
+        Outcome::Message(message) => assert!(message.lines.join("").contains("酒馆")),
         o => panic!("expected show, got {:?}", o),
     }
-    assert_eq!(*s.state(), AppState::Exploring);
-    assert!(s.save().checkpoints.iter().any(|c| c.kind == CheckpointKind::ChapterStart));
+    assert_eq!(*s.state(), SessionState::Exploring);
+    assert!(s
+        .save()
+        .checkpoints
+        .iter()
+        .any(|c| c.kind == CheckpointKind::ChapterStart));
 }
 
 #[test]
@@ -67,7 +71,13 @@ fn ask_direct_collects_clue_and_records_snapshot() {
     }
     assert!(s.save().has_clue("c1", "wolf_alibi"));
     assert_eq!(s.save().viewed_dialogues.get("c1").unwrap().len(), 1);
-    assert!(s.save().discovered.topics.get("c1").unwrap().contains(&"wolf.whereabouts".to_string()));
+    assert!(s
+        .save()
+        .discovered
+        .topics
+        .get("c1")
+        .unwrap()
+        .contains(&"wolf.whereabouts".to_string()));
 }
 
 #[test]
@@ -76,7 +86,7 @@ fn ask_unknown_target_not_in_scene() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("ask ghost whereabouts".into())) {
-        Outcome::Show(m) => assert_eq!(m[0], "这里没有这个角色。"),
+        Outcome::Message(message) => assert_eq!(message.lines[0], "这里没有这个角色。"),
         o => panic!("got {:?}", o),
     }
 }
@@ -87,7 +97,7 @@ fn ask_locked_topic_hint() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("ask wolf secret".into())) {
-        Outcome::Show(m) => assert_eq!(m[0], "你还没有足够线索。"),
+        Outcome::Message(message) => assert_eq!(message.lines[0], "你还没有足够线索。"),
         o => panic!("got {:?}", o),
     }
 }
@@ -98,8 +108,8 @@ fn gaze_toggles_world_and_description() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("gaze".into())) {
-        Outcome::Show(m) => {
-            let joined = m.join("\n");
+        Outcome::Message(message) => {
+            let joined = message.lines.join("\n");
             assert!(joined.contains("左眼·影子"));
             assert!(joined.contains("酒馆影子"));
         }
@@ -114,11 +124,11 @@ fn move_blocked_and_allowed() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("move cellar".into())) {
-        Outcome::Show(m) => assert_eq!(m[0], "你现在无法前往那里。"),
+        Outcome::Message(message) => assert_eq!(message.lines[0], "你现在无法前往那里。"),
         o => panic!("got {:?}", o),
     }
     match s.handle(Input::Text("move market".into())) {
-        Outcome::Show(m) => assert!(m[0].contains("集市")),
+        Outcome::Message(message) => assert!(message.lines[0].contains("集市")),
         o => panic!("got {:?}", o),
     }
     assert_eq!(s.save().current_scene, "market");
@@ -131,7 +141,11 @@ fn judge_creates_checkpoint_and_advances() {
     s.handle(Input::Ack);
     s.handle(Input::Text("judge wolf".into()));
     assert_eq!(s.save().current_chapter, "c_truth");
-    assert!(s.save().checkpoints.iter().any(|c| c.kind == CheckpointKind::BeforeJudgment));
+    assert!(s
+        .save()
+        .checkpoints
+        .iter()
+        .any(|c| c.kind == CheckpointKind::BeforeJudgment));
 }
 
 #[test]
@@ -140,7 +154,7 @@ fn judge_unknown_target_hint() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("judge ghost".into())) {
-        Outcome::Show(m) => assert_eq!(m[0], "现在还无法审判他。"),
+        Outcome::Message(message) => assert_eq!(message.lines[0], "现在还无法审判他。"),
         o => panic!("got {:?}", o),
     }
 }
@@ -153,19 +167,19 @@ fn map_rollback_to_chapter_start() {
     s.handle(Input::Text("ask wolf whereabouts".into()));
     s.handle(Input::Text("gaze".into()));
     match s.handle(Input::Text("map".into())) {
-        Outcome::Menu { options, .. } => assert!(!options.is_empty()),
+        Outcome::MenuRequested { options, .. } => assert!(!options.is_empty()),
         o => panic!("got {:?}", o),
     }
-    match s.handle(Input::Pick(0)) {
-        Outcome::Confirm { .. } => {}
+    match s.handle(Input::Select(Selection::Index(0))) {
+        Outcome::ConfirmationRequested { .. } => {}
         o => panic!("got {:?}", o),
     }
     match s.handle(Input::Confirm(true)) {
-        Outcome::Intro { .. } => {}
+        Outcome::ChapterIntro { .. } => {}
         o => panic!("expected intro re-show, got {:?}", o),
     }
     match s.handle(Input::Ack) {
-        Outcome::Show(_) => {}
+        Outcome::Message(_) => {}
         o => panic!("got {:?}", o),
     }
     assert!(!s.save().has_clue("c1", "wolf_alibi"));
@@ -179,11 +193,11 @@ fn help_overview_and_unknown() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("help".into())) {
-        Outcome::Show(m) => assert!(m.join("\n").contains("ask")),
+        Outcome::Message(message) => assert!(message.lines.join("\n").contains("ask")),
         o => panic!("got {:?}", o),
     }
     match s.handle(Input::Text("help fly".into())) {
-        Outcome::Show(m) => assert!(m[0].contains("未知指令")),
+        Outcome::Message(message) => assert!(message.lines[0].contains("未知指令")),
         o => panic!("got {:?}", o),
     }
 }
@@ -194,7 +208,7 @@ fn unknown_command_hint() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("fly".into())) {
-        Outcome::Show(m) => assert!(m[0].contains("未知指令")),
+        Outcome::Message(message) => assert!(message.lines[0].contains("未知指令")),
         o => panic!("got {:?}", o),
     }
 }
@@ -205,7 +219,7 @@ fn quit_persists_and_returns() {
     s.start_new_game();
     s.handle(Input::Ack);
     match s.handle(Input::Text("quit".into())) {
-        Outcome::Quit => {}
+        Outcome::QuitRequested => {}
         o => panic!("got {:?}", o),
     }
 }
@@ -219,7 +233,9 @@ fn hint_gaze_after_three_surface_asks() {
     for _ in 0..3 {
         match s.handle(Input::Text("ask wolf whereabouts".into())) {
             Outcome::Dialogue { notes, .. } => {
-                if notes.iter().any(|n| n.contains("gaze")) { saw_gaze_hint = true; }
+                if notes.iter().any(|n| n.contains("gaze")) {
+                    saw_gaze_hint = true;
+                }
             }
             o => panic!("got {:?}", o),
         }
@@ -245,7 +261,7 @@ fn hint_map_after_first_judgment() {
     s.handle(Input::Ack);
     s.handle(Input::Text("gaze".into()));
     match s.handle(Input::Text("judge crow".into())) {
-        Outcome::Show(m) => assert!(m.iter().any(|x| x.contains("map"))),
+        Outcome::Message(message) => assert!(message.lines.iter().any(|x| x.contains("map"))),
         o => panic!("got {:?}", o),
     }
 }
@@ -268,7 +284,7 @@ fn ending_judgment_with_outro_keeps_result_text() {
     assert_eq!(s.save().current_chapter, "c_truth");
 
     match s.handle(Input::Text("judge wolf".into())) {
-        Outcome::Outro { text } => {
+        Outcome::ChapterOutro { text } => {
             assert!(text.contains("终审。"));
             assert!(text.contains("真相结局。"));
         }
@@ -283,8 +299,10 @@ fn title_shows_menu_no_save() {
     let mut s = build_session();
     // 新 Session 在 Title 状态，任意输入触发菜单构建
     match s.handle(Input::Text("".into())) {
-        Outcome::Menu { title, options } => {
-            assert!(title.contains("Darkbluff"));
+        Outcome::MenuRequested {
+            prompt, options, ..
+        } => {
+            assert!(prompt.contains("Darkbluff"));
             // 无存档时没有"继续"
             assert!(!options.iter().any(|o| o.id == "continue"));
             assert!(options.iter().any(|o| o.id == "new_game"));
@@ -298,9 +316,20 @@ fn title_shows_menu_no_save() {
 fn title_new_game_starts_chapter() {
     let mut s = build_session();
     s.handle(Input::Text("".into())); // 触发 Title 菜单
-    match s.handle(Input::Pick(0)) {
-        Outcome::Intro { text } => assert!(text.contains("首章开场")),
-        Outcome::Show(_) => {} // 无 intro 时直接 Show
+    match s.handle(Input::Select(Selection::Index(0))) {
+        Outcome::ChapterIntro { text } => assert!(text.contains("首章开场")),
+        Outcome::Message(_) => {} // 无 intro 时直接展示场景消息
+        o => panic!("expected intro or show, got {:?}", o),
+    }
+}
+
+#[test]
+fn menu_selection_can_use_option_id() {
+    let mut s = build_session();
+    s.handle(Input::Text("".into()));
+    match s.handle(Input::Select(Selection::Id("new_game".into()))) {
+        Outcome::ChapterIntro { text } => assert!(text.contains("首章开场")),
+        Outcome::Message(_) => {}
         o => panic!("expected intro or show, got {:?}", o),
     }
 }
@@ -309,8 +338,8 @@ fn title_new_game_starts_chapter() {
 fn title_quit_exits() {
     let mut s = build_session();
     s.handle(Input::Text("".into())); // 触发 Title 菜单 [new_game, quit]
-    match s.handle(Input::Pick(1)) {
-        Outcome::Quit => {}
+    match s.handle(Input::Select(Selection::Index(1))) {
+        Outcome::QuitRequested => {}
         o => panic!("expected quit, got {:?}", o),
     }
 }

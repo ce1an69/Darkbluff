@@ -12,6 +12,62 @@ pub struct MenuOption {
     pub label: String,
 }
 
+/// 选择菜单的领域类型。渲染层可据此决定展示方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuKind {
+    Title,
+    AskCharacter,
+    AskTopic,
+    JudgeCharacter,
+    MoveDestination,
+    Checkpoint,
+}
+
+/// 需要二次确认的领域动作。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfirmationAction {
+    NewGame,
+    Rollback { checkpoint_id: String },
+}
+
+/// 文本消息级别。渲染层可据此选择样式或通知策略。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageLevel {
+    Info,
+    Warning,
+    Error,
+}
+
+/// 一组领域消息。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Message {
+    pub level: MessageLevel,
+    pub lines: Vec<String>,
+}
+
+impl Message {
+    pub fn info(lines: Vec<String>) -> Self {
+        Self {
+            level: MessageLevel::Info,
+            lines,
+        }
+    }
+
+    pub fn warning(lines: Vec<String>) -> Self {
+        Self {
+            level: MessageLevel::Warning,
+            lines,
+        }
+    }
+
+    pub fn error(lines: Vec<String>) -> Self {
+        Self {
+            level: MessageLevel::Error,
+            lines,
+        }
+    }
+}
+
 /// 笔记中的对话条目。
 #[derive(Debug, Clone)]
 pub struct NoteDialogue {
@@ -50,48 +106,51 @@ pub struct NoteView {
     pub judgments: Vec<NoteJudgment>,
 }
 
-/// 引擎产出。TUI 据此渲染；测试据此断言。
+/// 引擎产出。渲染层（TUI/GUI）据此自行决定展示方式；测试据此断言。
 #[derive(Debug, Clone)]
 pub enum Outcome {
-    /// 展示若干文本行（提示 / 剧情等），随后回到当前交互态。
-    Show(Vec<String>),
+    /// 一组领域消息（提示 / 剧情等）。
+    Message(Message),
     /// 展示对话全文 + 备注。
     Dialogue {
         header: String,
         body: String,
         notes: Vec<String>,
     },
-    /// 展示一个选择菜单。
-    Menu {
-        title: String,
+    /// 请求渲染层打开选择菜单。
+    MenuRequested {
+        kind: MenuKind,
+        prompt: String,
         options: Vec<MenuOption>,
     },
-    /// 破坏性操作二次确认。
-    Confirm {
+    /// 请求渲染层进行二次确认。
+    ConfirmationRequested {
+        action: ConfirmationAction,
         prompt: String,
     },
     /// 章节开场文本（等待 Ack）。
-    Intro {
-        text: String,
-    },
+    ChapterIntro { text: String },
     /// 终章结局文本（等待 Ack）。
-    Outro {
-        text: String,
-    },
+    ChapterOutro { text: String },
     /// 笔记视图。
-    Note(NoteView),
+    Notes(NoteView),
     /// 结局界面。
-    Ending {
+    EndingReached {
         title: String,
         found: usize,
         total: usize,
     },
-    /// 回到标题界面。
-    Title,
     /// 退出。
-    Quit,
+    QuitRequested,
     /// 静默忽略（菜单态下的非法输入）。
     Ignored,
+}
+
+/// 菜单选择。TUI 可按序号选择，GUI 可直接按 option id 选择。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Selection {
+    Index(usize),
+    Id(String),
 }
 
 /// 输入。
@@ -99,8 +158,8 @@ pub enum Outcome {
 pub enum Input {
     /// 命令行文本（Exploring 态）。
     Text(String),
-    /// 菜单编号选择。
-    Pick(usize),
+    /// 菜单选择。
+    Select(Selection),
     /// 取消（Esc）。
     Cancel,
     /// 二次确认（true=确认）。
@@ -109,9 +168,9 @@ pub enum Input {
     Ack,
 }
 
-/// 应用状态（与 architecture.md「状态机」对应；Title/ViewingNote 的渲染由 UI 层处理）。
+/// 会话状态（与 architecture.md「状态机」对应；渲染层可据此选择可接受输入）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AppState {
+pub enum SessionState {
     Title,
     ShowingIntro,
     Exploring,

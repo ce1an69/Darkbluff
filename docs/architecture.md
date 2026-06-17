@@ -26,8 +26,7 @@
 darkbluff/
 ├── Cargo.toml
 ├── src/
-│   ├── main.rs                # 入口，初始化终端和事件循环
-│   ├── app.rs                 # 应用状态管理
+│   ├── main.rs                # CLI 入口
 │   ├── cli.rs                 # CLI 参数（play/check/no-motion 等）
 │   ├── ui/                    # UI 层
 │   │   ├── mod.rs
@@ -41,7 +40,15 @@ darkbluff/
 │   │   ├── mod.rs
 │   │   ├── commands.rs        # 指令解析（ask/judge/move/gaze/map/note/help/quit）
 │   │   ├── state.rs           # 游戏状态机
-│   │   ├── logic.rs           # 审判逻辑 + 自动推进章节
+│   │   ├── outcome.rs         # UI 无关的 Input / Outcome / SessionState API
+│   │   ├── ask.rs             # ask 指令流程
+│   │   ├── judge.rs           # judge 指令与章节推进
+│   │   ├── navigation.rs      # move / gaze
+│   │   ├── map.rs             # checkpoint 菜单与回滚
+│   │   ├── system.rs          # note / quit
+│   │   ├── chapter_flow.rs    # 章节进入、intro/outro、结局
+│   │   ├── note_view.rs       # 笔记视图组装
+│   │   ├── logic.rs           # 纯领域查询与存档 reconcile
 │   │   └── condition.rs       # 条件表达式求值（扁平 all_of/any_of/not）
 │   ├── content/               # 内容引擎（无状态加载/查询层）
 │   │   ├── mod.rs
@@ -53,7 +60,7 @@ darkbluff/
 │   └── save/                  # 存档系统
 │       ├── mod.rs
 │       ├── schema.rs          # 存档数据结构定义
-│       ├── snapshot.rs        # note 对话快照读写
+│       ├── snapshot.rs        # note 快照读写
 │       ├── checkpoint.rs      # 检查点创建与回滚（数组长度截断）
 │       ├── atomic.rs          # 原子写入 + .bak 备份 + 损坏恢复
 │       └── migration.rs       # 存档版本迁移逻辑
@@ -133,21 +140,30 @@ darkbluff --data-dir <path>      # 指定内容数据目录（仅开发 feature 
 
 ## 状态机
 
-`app.rs` 维护一个显式状态机，决定当前 UI 渲染与可接受的输入：
+`engine::Session` 维护 UI 无关的显式状态机。渲染层只通过 `Input` 驱动会话、根据 `Outcome` 渲染结果，并可读取 `SessionState` 判断当前可接受输入。引擎层不依赖 ratatui/crossterm，也不暴露 `SaveStore` 给 UI 层；TUI 与未来 GUI 应共享同一套会话 API。
 
 | 状态 | 说明 |
 |------|------|
-| `Title` | 标题界面（新游戏 / 继续 / 设置 / 退出） |
+| `Title` | 标题菜单（新游戏 / 继续 / 退出） |
 | `ShowingIntro` | 章节开场/过场文本（`intro`）展示中，玩家确认后进入 `Exploring`；无 `intro` 则跳过 |
 | `Exploring` | 章节内自由探索（ask / move / gaze / map / note / help / quit 可用） |
-| `ChoosingCharacter` | `ask`/`judge` 无参数时的第一步：选场景在场角色（`ask`）或本章未审判角色（`judge`） |
-| `ChoosingTopic` | `ask` 第二步：话题菜单选择 |
-| `ViewingNote` | 笔记面板浏览中（含跨章节标签页） |
-| `ViewingMap` | 章节树 / checkpoint 地图浏览中，可选择已经历过的 checkpoint 回滚 |
+| `ChoosingAskCharacter` | `ask` 无参数时选择当前场景在场角色 |
+| `ChoosingAskTopic` | `ask` 第二步：选择该角色可问话题 |
+| `ChoosingJudgeCharacter` | `judge` 无参数时选择本章未审判角色 |
+| `ChoosingMove` | `move` 无参数时选择当前可达场景 |
+| `ChoosingCheckpoint` | `map` 后选择已经历过的 checkpoint |
 | `Confirming` | 破坏性操作二次确认（map checkpoint 回滚 / 覆盖存档） |
-| `Transitioning` | 场景切换 / 视角切换动画播放中（输入排队） |
 | `ShowingOutro` | 终章结局文本（`outro`）展示中，玩家确认后进入 `Ending`；无 `outro` 则跳过直接进入 `Ending` |
 | `Ending` | 结局界面：终章 `title` 作为结局名 +「已发现结局 X/Y」+ 返回标题 |
+
+对外输入输出类型：
+
+- `Input::Text` 仅在 `Exploring` 态承载玩家命令文本。
+- `Input::Select(Selection::Index | Selection::Id)` 用于所有菜单选择；TUI 可按索引，GUI 可直接传 `MenuOption.id`。
+- `Input::Confirm(bool)` 用于二次确认，`Input::Cancel` 用于取消菜单/确认，`Input::Ack` 用于继续 intro/outro/ending。
+- `Outcome::Message(Message)` 返回带级别的领域消息；`MessageLevel` 只表达 info/warning/error 语义，不绑定具体 UI 样式。
+- `Outcome::MenuRequested { kind, prompt, options }` 与 `Outcome::ConfirmationRequested { action, prompt }` 只描述领域意图，不描述控件形态。
+- `Outcome::ChapterIntro` / `ChapterOutro` / `Dialogue` / `Notes` / `EndingReached` / `QuitRequested` 分别表达叙事、对话、笔记、结局与退出意图。
 
 ## 设计取舍
 
