@@ -1,44 +1,31 @@
-use std::io::{self, Stdout};
+//! 终端生命周期管理：raw mode + alternate screen 的 RAII 守卫。
+//!
+//! 经 `ratatui::try_init` / `ratatui::restore` 接管进出：`try_init` 会安装 panic hook，
+//! 即便运行期 panic 也会先恢复终端；失败（如非 TTY 环境）返回 `io::Error` 而非 panic。
+//! 不捕获鼠标（本 TUI 无鼠标交互）。
 
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::execute;
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
+use ratatui::DefaultTerminal;
+
 use darkbluff_core::error::Result;
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 
-pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
-
+/// 进入 raw mode + alternate screen，返回终端句柄；Drop 时自动恢复。
 pub struct TerminalGuard {
-    terminal: TuiTerminal,
+    terminal: DefaultTerminal,
 }
 
 impl TerminalGuard {
     pub fn enter() -> Result<Self> {
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend)?;
-        terminal.clear()?;
+        let terminal = ratatui::try_init()?;
         Ok(Self { terminal })
     }
 
-    pub fn terminal(&mut self) -> &mut TuiTerminal {
+    pub fn terminal(&mut self) -> &mut DefaultTerminal {
         &mut self.terminal
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
-        let _ = execute!(
-            self.terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        );
-        let _ = self.terminal.show_cursor();
+        ratatui::restore();
     }
 }

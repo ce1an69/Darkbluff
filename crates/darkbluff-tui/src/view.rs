@@ -3,10 +3,10 @@ use std::collections::VecDeque;
 use darkbluff_core::engine::{MenuKind, MenuOption, SessionState};
 use darkbluff_core::world::World;
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use ratatui::widgets::{Block, Clear, List, ListItem, Paragraph, Wrap};
 use unicode_width::UnicodeWidthStr;
 
 use crate::input::CommandInput;
@@ -82,7 +82,7 @@ pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
 }
 
 fn draw_too_small(frame: &mut Frame, area: Rect) {
-    let block = Block::default().borders(Borders::ALL).title("DarkBluff");
+    let block = Block::bordered().title("DarkBluff");
     let text = Paragraph::new("终端窗口太小，请至少调整到 80x24。")
         .block(block)
         .alignment(Alignment::Center);
@@ -108,13 +108,13 @@ fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
         world,
         Span::raw(motion),
     ]);
-    let block = Block::default().borders(Borders::ALL);
+    let block = Block::bordered();
     frame.render_widget(Paragraph::new(line).block(block), area);
 }
 
 fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
     let title = format!(" 场景 · {} ", state.scene_name);
-    let block = Block::default().borders(Borders::ALL).title(title);
+    let block = Block::bordered().title(title);
     let paragraph = Paragraph::new(state.scene_text)
         .block(block)
         .wrap(Wrap { trim: false });
@@ -125,7 +125,7 @@ fn draw_log(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
     let height = area.height.saturating_sub(2) as usize;
     let skip = state.records.len().saturating_sub(height);
     let items = state.records.iter().skip(skip).map(record_item);
-    let block = Block::default().borders(Borders::ALL).title(" 记录 ");
+    let block = Block::bordered().title(" 记录 ");
     frame.render_widget(List::new(items).block(block), area);
 }
 
@@ -164,7 +164,7 @@ fn draw_input(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
             "↑/↓ 选择，Enter 确认，Esc 取消，可按数字直选".to_string(),
         ),
     };
-    let block = Block::default().borders(Borders::ALL).title(title);
+    let block = Block::bordered().title(title);
     frame.render_widget(Paragraph::new(content).block(block), area);
 
     if matches!(state.state, SessionState::Exploring) {
@@ -178,7 +178,7 @@ fn draw_input(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
 }
 
 fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
-    let popup = centered(area, 62, menu.options.len() as u16 + 5);
+    let popup = centered_rect(area, 62, menu.options.len() as u16 + 5);
     frame.render_widget(Clear, popup);
 
     let title = match menu.kind {
@@ -189,7 +189,7 @@ fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
         MenuKind::MoveDestination => " 选择目的地 ",
         MenuKind::Checkpoint => " 选择检查点 ",
     };
-    let block = Block::default().borders(Borders::ALL).title(title);
+    let block = Block::bordered().title(title);
     let mut lines = vec![Line::from(menu.prompt.to_string()), Line::from("")];
     for (i, option) in menu.options.iter().enumerate() {
         let marker = if i == menu.selected { ">" } else { " " };
@@ -213,27 +213,28 @@ fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
 }
 
 fn draw_confirmation(frame: &mut Frame, area: Rect, prompt: &str) {
-    let popup = centered(area, 60, 7);
+    let popup = centered_rect(area, 60, 7);
     frame.render_widget(Clear, popup);
     let text = Text::from(vec![
         Line::from(prompt),
         Line::from(""),
         Line::from("y / Enter 确认    n / Esc 取消").centered(),
     ]);
-    let block = Block::default().borders(Borders::ALL).title(" 确认 ");
+    let block = Block::bordered().title(" 确认 ");
     frame.render_widget(
         Paragraph::new(text).block(block).wrap(Wrap { trim: true }),
         popup,
     );
 }
 
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
+fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     let width = width.min(area.width.saturating_sub(4)).max(20);
     let height = height.min(area.height.saturating_sub(4)).max(5);
-    Rect {
-        x: area.x + area.width.saturating_sub(width) / 2,
-        y: area.y + area.height.saturating_sub(height) / 2,
-        width,
-        height,
-    }
+    let [rect] = Layout::horizontal([Constraint::Length(width)])
+        .flex(Flex::Center)
+        .areas(area);
+    let [rect] = Layout::vertical([Constraint::Length(height)])
+        .flex(Flex::Center)
+        .areas(rect);
+    rect
 }
