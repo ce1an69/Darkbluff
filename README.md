@@ -4,26 +4,32 @@ CLI/TUI 文字推理游戏。玩家扮演一只异色瞳的猫——右眼看表
 
 ## 当前状态
 
-核心引擎(content/save/engine/cli)与基础 TUI 已接入,**133 测试通过**。
+核心引擎(content/save/engine/cli)与 TUI 渲染层已完成,**137 测试通过**。
+
+TUI:圆角 Catppuccin 紫色主题;左侧 markdown 对话转录、右侧场景描述 + 在场 NPC,底部 Claude-Code 式斜杠指令输入(`/ask`、`/judge`... 输入即自动补全,候选与引擎菜单同源);界面文案英文,剧情内容随数据语言。
+
+> 仓库暂未附带正式 `data/`,以下示例使用测试 fixture 数据——一个可完整通关的迷你剧本「失踪的屠夫」。
 
 ## 快速开始
 
 ```bash
-# 内容校验
+# 内容校验(离线,不启动 TUI)
 cargo run -- check --data-dir crates/darkbluff-core/tests/fixtures/data
 
-# 进入游戏（当前示例使用测试 fixture 数据）
+# 进入游戏(TUI,终端 ≥ 86×24)
 cargo run -- --data-dir crates/darkbluff-core/tests/fixtures/data
 
 # 运行测试
 cargo test
 ```
 
+游戏内操作:标题菜单 `↑/↓` 选择、`Enter` 确认;探索态输入 `/` 触发指令补全,`Tab` 补全、`Enter` 提交;任意状态 `Ctrl+C` 存档退出。指令:`ask / judge / move / gaze / note / map / help / quit`。
+
 ## 技术栈
 
-Rust · ratatui · crossterm · serde/JSON · YAML(serde_yml) · clap · tracing · dirs · chrono
+Rust · ratatui · crossterm · unicode-width · serde/JSON · YAML(serde_yml) · clap · tracing · dirs · chrono
 
-数据结构 YAML + Markdown,与代码完全分离。正式 `data/` 与发布模式 `include_dir` 内嵌待实现；当前示例使用测试 fixture。
+数据结构 YAML + Markdown,与代码完全分离。正式 `data/` 与发布模式 `include_dir!` 内嵌待实现;当前示例使用测试 fixture。
 
 ## 项目结构
 
