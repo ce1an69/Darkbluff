@@ -2,6 +2,16 @@
 
 A CLI/TUI mystery deduction game. Play as a cat with heterochromia — right eye sees the surface world (truth), left eye sees the shadow world (lies). Gather clues, judge characters, and piece together the truth.
 
+## Story
+
+A forgotten industrial town. The slaughterhouse runs day and night; the smell of iron and blood covers every alley. The surface world maintains a veneer of order — the tavern is open, the market is trading, workers shuffle between shacks. Switch to the left eye: the same wall begins to writhe, and beneath every conversation churns the fear and desire the speaker is denying.
+
+There is no absolute good or evil here. The Butcher's Guild controls the economy; the Guildmaster's silence is itself a position. A few possess psychic aberrations — they can sense when they are being watched, can limit how much of their inner lies leak out. One among them is almost perfectly smooth; the cat's left eye cannot get a grip on anything.
+
+No magic. No monsters. The supernatural exists only in the mind. But a gaze has weight — those caught in the cat's heterochromatic stare feel an unease they cannot explain.
+
+Seven sins. Seven judgments. Each judgment peels back a layer of the town, and a layer of the cat. Four worldlines collapse from the same fragments into four shapes — Survivor, Participant, Key, Projection. None of them is the truth. The truth is what you piece together after walking every path.
+
 ## Status
 
 Core engine (content/save/engine/CLI) and the TUI render layer are complete — **137 tests passing**.
