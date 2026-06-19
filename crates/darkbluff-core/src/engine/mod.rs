@@ -23,3 +23,8 @@ pub use outcome::{
     Selection, SessionState,
 };
 pub use state::Session;
+
+/// 已知指令名（解析与渲染层共用，避免两处名单漂移）。
+pub use commands::COMMAND_NAMES;
+/// 渲染层补全用的候选构建器：与引擎菜单同源过滤（可见话题 / 未审判角色 / 可达场景）。
+pub use logic::{ask_topic_options, move_options, unjudged_character_options};
