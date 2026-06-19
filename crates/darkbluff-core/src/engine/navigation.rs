@@ -11,12 +11,11 @@ impl Session {
         self.hints.ever_gazed = true;
         self.persist();
         self.state = SessionState::Exploring;
-        let eye = match self.save.current_world {
-            World::Surface => "右眼·表面",
-            World::Shadow => "左眼·影子",
+        let (eye, action) = match self.save.current_world {
+            World::Surface => ("右眼·表面", "睁开右眼"),
+            World::Shadow => ("左眼·影子", "闭上右眼"),
         };
-        let mut msgs = vec![format!("[已切换到 {eye}]")];
-        msgs.extend(self.scene_description_messages());
+        let msgs = vec![format!("[{eye}] {action}，视野里的事物好像变得不一样了…")];
         self.then_narrative(Outcome::Message(Message::info(msgs)))
     }
 

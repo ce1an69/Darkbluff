@@ -160,7 +160,7 @@ fn ask_locked_topic_hint() {
 }
 
 #[test]
-fn gaze_toggles_world_and_description() {
+fn gaze_toggles_world_and_shows_action() {
     let mut s = build_session();
     s.start_new_game();
     s.handle(Input::Ack);
@@ -168,7 +168,7 @@ fn gaze_toggles_world_and_description() {
         Outcome::Message(message) => {
             let joined = message.lines.join("\n");
             assert!(joined.contains("左眼·影子"));
-            assert!(joined.contains("酒馆影子"));
+            assert!(joined.contains("闭上右眼"));
         }
         o => panic!("got {:?}", o),
     }
