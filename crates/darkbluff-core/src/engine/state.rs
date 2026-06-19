@@ -165,41 +165,7 @@ impl Session {
             (SessionState::Ending, _) => Outcome::Ignored,
 
             // 标题界面：新游戏 / 继续 / 退出
-            (SessionState::Title, Input::Select(selection)) => {
-                if !self.has_pending_menu() {
-                    self.enter_title()
-                } else {
-                    match self.selection_id(&selection).as_deref() {
-                        Some("new_game") => {
-                            if self.store.has_save() {
-                                self.pending.action =
-                                    PendingAction::Confirm(ConfirmationAction::NewGame);
-                                self.state = SessionState::Confirming;
-                                Outcome::ConfirmationRequested {
-                                    action: ConfirmationAction::NewGame,
-                                    prompt: "已有存档，新游戏将覆盖。确认？".into(),
-                                }
-                            } else {
-                                self.start_new_game()
-                            }
-                        }
-                        Some("continue") => match self.store.load() {
-                            Ok(crate::save::LoadResult::Save(save, report)) => {
-                                let mut outcome = self.continue_with(save);
-                                for w in report.warning_messages() {
-                                    if let Outcome::Message(ref mut message) = outcome {
-                                        message.lines.insert(0, w);
-                                    }
-                                }
-                                outcome
-                            }
-                            _ => Outcome::Message(Message::error(vec!["存档加载失败。".into()])),
-                        },
-                        Some("quit") => self.do_quit(),
-                        _ => self.enter_title(),
-                    }
-                }
-            }
+            (SessionState::Title, Input::Select(selection)) => self.select_from_title(selection),
             (SessionState::Title, _) => {
                 if !self.has_pending_menu() {
                     self.enter_title()
@@ -208,34 +174,8 @@ impl Session {
                 }
             }
 
-            (SessionState::Confirming, Input::Confirm(true)) => match self.pending.action.clone() {
-                PendingAction::Confirm(ConfirmationAction::NewGame) => {
-                    self.pending.action = PendingAction::None;
-                    self.start_new_game()
-                }
-                PendingAction::Confirm(ConfirmationAction::Rollback { checkpoint_id }) => {
-                    self.pending.action = PendingAction::None;
-                    self.execute_rollback_confirm(&checkpoint_id)
-                }
-                _ => {
-                    self.state = SessionState::Exploring;
-                    Outcome::Message(Message::error(vec!["无效确认。".into()]))
-                }
-            },
-            (SessionState::Confirming, Input::Confirm(false))
-            | (SessionState::Confirming, Input::Cancel) => {
-                let was_title = matches!(
-                    self.pending.action,
-                    PendingAction::Confirm(ConfirmationAction::NewGame)
-                );
-                self.pending.action = PendingAction::None;
-                if was_title {
-                    self.enter_title()
-                } else {
-                    self.state = SessionState::Exploring;
-                    Outcome::Message(Message::info(vec!["已取消。".into()]))
-                }
-            }
+            (SessionState::Confirming, Input::Confirm(confirmed)) => self.handle_confirm(confirmed),
+            (SessionState::Confirming, Input::Cancel) => self.handle_confirm(false),
 
             (SessionState::Exploring, Input::Text(line)) => self.handle_command(&line),
             (SessionState::Exploring, _) => Outcome::Ignored,
@@ -246,15 +186,7 @@ impl Session {
             (SessionState::ChoosingAskCharacter, Input::Cancel) => self.cancel_menu(),
 
             (SessionState::ChoosingAskTopic, Input::Select(selection)) => {
-                let ch = match &self.pending.action {
-                    PendingAction::AskTopic { character, .. } => Some(character.clone()),
-                    _ => None,
-                };
-                let id = self.selection_id(&selection);
-                match (ch, id) {
-                    (Some(c), Some(t)) => self.ask_topic(&c, &t),
-                    _ => Outcome::Message(Message::error(vec!["无效选择。".into()])),
-                }
+                self.select_topic(selection)
             }
             (SessionState::ChoosingAskTopic, Input::Cancel) => self.cancel_menu(),
 
@@ -269,19 +201,7 @@ impl Session {
             (SessionState::ChoosingMove, Input::Cancel) => self.cancel_menu(),
 
             (SessionState::ChoosingCheckpoint, Input::Select(selection)) => {
-                if let Some(id) = self.selection_id(&selection) {
-                    let action = ConfirmationAction::Rollback { checkpoint_id: id };
-                    self.pending.action = PendingAction::Confirm(action.clone());
-                    self.state = SessionState::Confirming;
-                    Outcome::ConfirmationRequested {
-                        action,
-                        prompt:
-                            "回滚会丢弃该 checkpoint 之后的当前流程进度，discovered 保留。确认？"
-                                .into(),
-                    }
-                } else {
-                    Outcome::Message(Message::error(vec!["无效选择。".into()]))
-                }
+                self.begin_rollback(selection)
             }
             (SessionState::ChoosingCheckpoint, Input::Cancel) => self.cancel_menu(),
 
@@ -292,6 +212,111 @@ impl Session {
             | (_, Input::Confirm(_))
             | (_, Input::Ack) => Outcome::Ignored,
             (_, Input::Text(_)) => Outcome::Ignored,
+        }
+    }
+
+    // ----- 由 handle 抽出的具体状态转换（每条一个语义动作） -----
+
+    /// 标题界面选择：新游戏 / 继续 / 退出。
+    fn select_from_title(&mut self, selection: Selection) -> Outcome {
+        if !self.has_pending_menu() {
+            return self.enter_title();
+        }
+        match self.selection_id(&selection).as_deref() {
+            Some("new_game") => self.begin_new_game(),
+            Some("continue") => self.load_and_continue(),
+            Some("quit") => self.do_quit(),
+            _ => self.enter_title(),
+        }
+    }
+
+    /// 「新游戏」：已有存档则请求二次确认，否则直接开始。
+    fn begin_new_game(&mut self) -> Outcome {
+        if !self.store.has_save() {
+            return self.start_new_game();
+        }
+        self.pending.action = PendingAction::Confirm(ConfirmationAction::NewGame);
+        self.state = SessionState::Confirming;
+        Outcome::ConfirmationRequested {
+            action: ConfirmationAction::NewGame,
+            prompt: "已有存档，新游戏将覆盖。确认？".into(),
+        }
+    }
+
+    /// 「继续」：加载存档并入章，把迁移警告拼到结果前面。
+    fn load_and_continue(&mut self) -> Outcome {
+        match self.store.load() {
+            Ok(crate::save::LoadResult::Save(save, report)) => {
+                let mut outcome = self.continue_with(save);
+                for w in report.warning_messages() {
+                    if let Outcome::Message(ref mut message) = outcome {
+                        message.lines.insert(0, w);
+                    }
+                }
+                outcome
+            }
+            _ => Outcome::Message(Message::error(vec!["存档加载失败。".into()])),
+        }
+    }
+
+    /// 二次确认：true 执行 pending 动作，false / Cancel 回退。
+    fn handle_confirm(&mut self, confirmed: bool) -> Outcome {
+        match (confirmed, self.pending.action.clone()) {
+            (true, PendingAction::Confirm(ConfirmationAction::NewGame)) => {
+                self.pending.action = PendingAction::None;
+                self.start_new_game()
+            }
+            (true, PendingAction::Confirm(ConfirmationAction::Rollback { checkpoint_id })) => {
+                self.pending.action = PendingAction::None;
+                self.execute_rollback_confirm(&checkpoint_id)
+            }
+            (true, _) => {
+                self.state = SessionState::Exploring;
+                Outcome::Message(Message::error(vec!["无效确认。".into()]))
+            }
+            (false, _) => self.cancel_confirm(),
+        }
+    }
+
+    /// 取消确认：来自标题则回标题，否则回探索态。
+    fn cancel_confirm(&mut self) -> Outcome {
+        let was_title = matches!(
+            self.pending.action,
+            PendingAction::Confirm(ConfirmationAction::NewGame)
+        );
+        self.pending.action = PendingAction::None;
+        if was_title {
+            self.enter_title()
+        } else {
+            self.state = SessionState::Exploring;
+            Outcome::Message(Message::info(vec!["已取消。".into()]))
+        }
+    }
+
+    /// 选择询问话题：取 pending 里的角色 + 选择 id，执行 ask_topic。
+    fn select_topic(&mut self, selection: Selection) -> Outcome {
+        let character = match &self.pending.action {
+            PendingAction::AskTopic { character, .. } => Some(character.clone()),
+            _ => None,
+        };
+        let topic = self.selection_id(&selection);
+        match (character, topic) {
+            (Some(c), Some(t)) => self.ask_topic(&c, &t),
+            _ => Outcome::Message(Message::error(vec!["无效选择。".into()])),
+        }
+    }
+
+    /// 选择检查点：进入回滚二次确认。
+    fn begin_rollback(&mut self, selection: Selection) -> Outcome {
+        let Some(id) = self.selection_id(&selection) else {
+            return Outcome::Message(Message::error(vec!["无效选择。".into()]));
+        };
+        let action = ConfirmationAction::Rollback { checkpoint_id: id };
+        self.pending.action = PendingAction::Confirm(action.clone());
+        self.state = SessionState::Confirming;
+        Outcome::ConfirmationRequested {
+            action,
+            prompt: "回滚会丢弃该 checkpoint 之后的当前流程进度，discovered 保留。确认？".into(),
         }
     }
 
