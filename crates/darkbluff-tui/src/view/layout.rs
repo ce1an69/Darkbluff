@@ -163,12 +163,9 @@ fn scene_title(state: &ViewState<'_>) -> String {
 }
 
 fn scene_description_lines(state: &ViewState<'_>) -> Vec<Line<'static>> {
-    state
-        .scene_text
-        .split('\n')
-        .map(|raw| raw.trim())
-        .filter(|t| !t.is_empty())
-        .map(|t| Line::from(t.to_string()).style(Style::default().fg(theme::TEXT)))
+    crate::markdown::render(&state.scene_text)
+        .into_iter()
+        .map(|sl| Line::from(sl.text).style(sl.style))
         .collect()
 }
 
