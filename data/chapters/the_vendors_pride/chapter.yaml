@@ -1,0 +1,44 @@
+id: the_vendors_pride
+title: "老贩子的面具"
+order: 1
+intro: intro.md
+scenes:
+  - alley
+  - market
+  - tavern
+  - bridge
+starting_scene: alley
+characters:
+  - id: market_vendor
+    appears_in: [market]
+    topics:
+      - id: a_flatbread
+        label: "塞过来的饼"
+        available: true
+      - id: the_old_days
+        label: "当年的事"
+        available: true
+      - id: the_cats_eyes
+        label: "关于你这双眼睛"
+        available: false
+        unlock_after: keeper_the_vendor
+  - id: tavern_keeper
+    appears_in: [tavern]
+    topics:
+      - id: the_first_drink
+        label: "第一杯酒"
+        available: true
+      - id: the_vendor
+        label: "市场那个老贩子"
+        available: true
+required_judgments: [judge_vendor]
+narrative:
+  - id: voice_first_wake
+    label: 心声
+    text: narrative/voice_first.md
+  - id: fragment_slaughter
+    label: 记忆碎片
+    when: judge_vendor
+    text: narrative/fragment_slaughter.md
+next:
+  default: the_apprentices_envy

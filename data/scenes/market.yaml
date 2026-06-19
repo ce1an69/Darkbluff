@@ -1,0 +1,8 @@
+id: market
+name: "集市"
+connections:
+  - alley
+  - tavern
+description:
+  surface: text/scenes/market.surface.md
+  shadow: text/scenes/market.shadow.md

@@ -1,0 +1,7 @@
+id: shacks
+name: "工棚区"
+connections:
+  - clinic
+description:
+  surface: text/scenes/shacks.surface.md
+  shadow: text/scenes/shacks.shadow.md

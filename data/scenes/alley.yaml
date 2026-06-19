@@ -1,0 +1,7 @@
+id: alley
+name: "后巷"
+connections:
+  - market
+description:
+  surface: text/scenes/alley.surface.md
+  shadow: text/scenes/alley.shadow.md

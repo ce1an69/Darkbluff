@@ -1,0 +1,18 @@
+id: the_apprentices_envy
+title: "学徒的嫉妒"
+order: 2
+intro: intro.md
+scenes:
+  - shacks
+  - clinic
+starting_scene: shacks
+characters:
+  - id: butcher_apprentice
+    appears_in: [shacks]
+    topics:
+      - id: the_one_who_left
+        label: "那个走了的人"
+        available: true
+required_judgments: [judge_apprentice]
+next:
+  default: the_rage_chapter

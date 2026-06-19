@@ -1,0 +1,13 @@
+id: the_rage_chapter
+title: "暴怒"
+order: 3
+ending: true
+intro: intro.md
+scenes:
+  - shacks
+starting_scene: shacks
+characters:
+  - id: butcher_apprentice
+    topics: []
+required_judgments: [judge_placeholder]
+outro: outro.md

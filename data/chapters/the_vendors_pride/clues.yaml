@@ -1,0 +1,23 @@
+- id: vendor_flatbread_given
+  source: market_vendor.a_flatbread
+  world: surface
+
+- id: vendor_flatbread_denial
+  source: market_vendor.a_flatbread
+  world: shadow
+
+- id: vendor_glory_days
+  source: market_vendor.the_old_days
+  world: surface
+
+- id: vendor_nobody_remembers
+  source: market_vendor.the_old_days
+  world: shadow
+
+- id: keeper_first_drink
+  source: tavern_keeper.the_first_drink
+  world: surface
+
+- id: keeper_the_vendor
+  source: tavern_keeper.the_vendor
+  world: surface

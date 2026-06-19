@@ -1,0 +1,3 @@
+- id: judge_vendor
+  target: market_vendor
+  result: results/vendor_trial.md

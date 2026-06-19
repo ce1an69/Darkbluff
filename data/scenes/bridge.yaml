@@ -1,0 +1,9 @@
+id: bridge
+name: "铁桥"
+connections:
+  - tavern
+description:
+  surface: text/scenes/bridge.surface.md
+  shadow: text/scenes/bridge.shadow.md
+exit_attempt:
+  text: text/scenes/bridge.leave.md

@@ -1,0 +1,3 @@
+- id: judge_apprentice
+  target: butcher_apprentice
+  result: results/apprentice_trial.md

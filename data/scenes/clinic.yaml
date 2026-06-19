@@ -1,0 +1,7 @@
+id: clinic
+name: "旧诊所"
+connections:
+  - shacks
+description:
+  surface: text/scenes/clinic.surface.md
+  shadow: text/scenes/clinic.shadow.md
