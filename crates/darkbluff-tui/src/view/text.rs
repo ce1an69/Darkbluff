@@ -43,3 +43,34 @@ pub(super) fn truncate_s(s: &str, max_w: usize) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_ascii_into_chunks() {
+        assert_eq!(wrap_by_width("abcdef", 3), vec!["abc".to_string(), "def".to_string()]);
+    }
+
+    #[test]
+    fn wrap_cjk_by_display_width() {
+        // 每个汉字占 2 列：宽 4 容纳 2 字
+        assert_eq!(wrap_by_width("一二三", 4), vec!["一二".to_string(), "三".to_string()]);
+    }
+
+    #[test]
+    fn wrap_zero_width_passthrough() {
+        assert_eq!(wrap_by_width("abc", 0), vec!["abc".to_string()]);
+    }
+
+    #[test]
+    fn truncate_appends_ellipsis() {
+        assert_eq!(truncate_s("abcdef", 4), "abc…");
+    }
+
+    #[test]
+    fn truncate_keeps_short_input() {
+        assert_eq!(truncate_s("ab", 10), "ab");
+    }
+}

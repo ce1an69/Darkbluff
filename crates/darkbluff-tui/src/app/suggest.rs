@@ -143,3 +143,118 @@ fn apply_completion(value: &str, insert: &str) -> String {
     };
     format!("{prefix}{insert}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use darkbluff_core::content::{ContentEngine, InMemorySource};
+    use darkbluff_core::engine::{Input, Selection, Session};
+    use darkbluff_core::save::{FakeClock, SaveStore};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// 构造一个进入 c1/tavern 探索态的会话：wolf 在场，话题 whereabouts(可见)/secret(锁定)，
+    /// 审判点 judge_wolf，tavern 连通 market。
+    fn exploring_session() -> Session {
+        let src = InMemorySource::new()
+            .insert("scenes/tavern.yaml", "id: tavern\nname: 酒馆\nconnections: [market]\ndescription:\n  surface: t.md\n  shadow: t.md\n")
+            .insert("scenes/market.yaml", "id: market\nname: 集市\ndescription:\n  surface: m.md\n  shadow: m.md\n")
+            .insert("t.md", "酒馆。").insert("m.md", "集市。")
+            .insert("characters/wolf.yaml", "id: wolf\nname: 灰狼\n")
+            .insert("chapters/c1/chapter.yaml", "id: c1\ntitle: 首\nintro: i.md\nscenes: [tavern, market]\nstarting_scene: tavern\ncharacters:\n  - id: wolf\n    appears_in: [tavern]\n    topics:\n      - id: whereabouts\n        label: 行踪\n        available: true\n      - id: secret\n        label: 秘密\n        available: false\n        unlock_after:\n          all_of: [wolf_alibi]\nrequired_judgments: [judge_wolf]\nnext:\n  default: c2\n")
+            .insert("chapters/c1/i.md", "开场。")
+            .insert("chapters/c1/dialogues/wolf.md", "## whereabouts\n\n### [surface]\n\n在场。\n\n### [shadow]\n\n不在。\n")
+            .insert("chapters/c1/judgments.yaml", "- id: judge_wolf\n  target: wolf\n  result: r.md\n")
+            .insert("chapters/c1/r.md", "审判。")
+            .insert("chapters/c2/chapter.yaml", "id: c2\ntitle: 终\nending: true\nscenes: [tavern]\nstarting_scene: tavern\ncharacters:\n  - id: wolf\n    topics: []\nrequired_judgments: [judge_wolf_end]\n")
+            .insert("chapters/c2/judgments.yaml", "- id: judge_wolf_end\n  target: wolf\n  result: r2.md\n")
+            .insert("chapters/c2/r2.md", "终审。");
+        let engine = ContentEngine::load(&src).unwrap();
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("db-suggest-{}-{n}", std::process::id()));
+        let store = SaveStore::open(dir, Box::new(FakeClock::new())).unwrap();
+        let mut s = Session::new(engine, store);
+        s.handle(Input::Text(String::new())); // 进入标题、构建菜单
+        s.handle(Input::Select(Selection::Index(0))); // 新游戏 -> ChapterIntro
+        s.handle(Input::Ack); // -> Exploring@c1/tavern
+        s
+    }
+
+    // ----- 纯字符串辅助 -----
+
+    #[test]
+    fn strip_slash_removes_all_leading_slashes() {
+        assert_eq!(strip_slash("/ask"), "ask");
+        assert_eq!(strip_slash("//ask"), "ask"); // 多斜杠
+        assert_eq!(strip_slash("  ///ask wolf"), "ask wolf"); // 前导空白 + 多斜杠
+        assert_eq!(strip_slash("ask"), "ask"); // 无斜杠原样
+    }
+
+    #[test]
+    fn apply_completion_replaces_trailing_token() {
+        assert_eq!(apply_completion("/as", "/ask "), "/ask ");
+        assert_eq!(apply_completion("/ask wo", "wolf "), "/ask wolf ");
+        assert_eq!(apply_completion("/ask ", "wolf "), "/ask wolf ");
+    }
+
+    #[test]
+    fn filter_opts_matches_id_or_label() {
+        let cands = vec![("wolf".into(), "灰狼".into()), ("crow".into(), "乌鸦".into())];
+        assert_eq!(filter_opts(cands.clone(), "wo").len(), 1); // id 前缀
+        assert_eq!(filter_opts(cands.clone(), "灰").len(), 1); // label 包含
+        assert!(filter_opts(cands.clone(), "zzz").is_empty()); // 无匹配
+    }
+
+    // ----- compute_suggestions（此前 bug 集中区） -----
+
+    #[test]
+    fn suggest_filters_commands_by_prefix() {
+        let s = exploring_session();
+        let sg = compute_suggestions("/a", &s).expect("命令补全");
+        assert_eq!(sg.kind, SuggestKind::Command);
+        assert!(sg.items.iter().any(|i| i.display == "/ask"));
+        assert!(!sg.items.iter().any(|i| i.display == "/move")); // m 不匹配 a
+    }
+
+    #[test]
+    fn suggest_ask_lists_characters_in_scene() {
+        let s = exploring_session();
+        let sg = compute_suggestions("/ask ", &s).expect("角色补全");
+        assert_eq!(sg.kind, SuggestKind::Character);
+        assert!(sg.items.iter().any(|i| i.insert == "wolf "));
+    }
+
+    #[test]
+    fn suggest_ask_topic_excludes_locked() {
+        let s = exploring_session();
+        let sg = compute_suggestions("/ask wolf ", &s).expect("话题补全");
+        assert_eq!(sg.kind, SuggestKind::Topic);
+        // secret 锁定(无 wolf_alibi) -> 不出现；仅 whereabouts
+        assert_eq!(sg.items.len(), 1);
+        assert_eq!(sg.items[0].insert, "whereabouts ");
+    }
+
+    #[test]
+    fn suggest_move_lists_reachable_scenes() {
+        let s = exploring_session();
+        let sg = compute_suggestions("/move ", &s).expect("场景补全");
+        assert_eq!(sg.kind, SuggestKind::Scene);
+        assert!(sg.items.iter().any(|i| i.insert == "market ")); // tavern 连通 market
+    }
+
+    #[test]
+    fn suggest_judge_lists_only_unjudged() {
+        let s = exploring_session();
+        let sg = compute_suggestions("/judge ", &s).expect("审判补全");
+        assert_eq!(sg.kind, SuggestKind::Character);
+        assert!(sg.items.iter().any(|i| i.insert == "wolf ")); // judge_wolf 尚未审判
+    }
+
+    #[test]
+    fn suggest_returns_none_for_empty_or_unknown() {
+        let s = exploring_session();
+        assert!(compute_suggestions("", &s).is_none());
+        assert!(compute_suggestions("xyz", &s).is_none()); // 非命令、无斜杠
+    }
+}

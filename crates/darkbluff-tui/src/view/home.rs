@@ -94,3 +94,20 @@ fn render_centered(frame: &mut Frame, area: Rect, y: u16, line: Line<'_>) {
         },
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_known_title_option_ids_to_english() {
+        assert_eq!(title_option_label("new_game", "新游戏"), "New Game");
+        assert_eq!(title_option_label("continue", "继续"), "Continue");
+        assert_eq!(title_option_label("quit", "退出"), "Quit");
+    }
+
+    #[test]
+    fn falls_back_to_label_for_unknown_id() {
+        assert_eq!(title_option_label("settings", "Settings"), "Settings");
+    }
+}
