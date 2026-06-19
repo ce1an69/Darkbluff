@@ -4,8 +4,11 @@
 //! 的 `Session` / `Input` / `Outcome` 契约驱动 ratatui 渲染循环，不触碰 engine 内部模块。
 
 mod app;
+mod command;
 mod input;
+mod markdown;
 mod terminal;
+mod theme;
 mod view;
 
 use darkbluff_core::content::ContentEngine;

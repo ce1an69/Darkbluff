@@ -15,6 +15,17 @@ impl CommandInput {
         UnicodeWidthStr::width(&self.value[..self.byte_idx()]) as u16
     }
 
+    /// 光标是否在行尾（斜杠补全仅在此情形下弹出）。
+    pub fn cursor_at_end(&self) -> bool {
+        self.cursor == self.value.chars().count()
+    }
+
+    /// 整体替换内容并把光标移到行尾（补全时使用）。
+    pub fn set_value(&mut self, v: String) {
+        self.value = v;
+        self.cursor = self.value.chars().count();
+    }
+
     pub fn insert(&mut self, c: char) {
         let idx = self.byte_idx();
         self.value.insert(idx, c);
