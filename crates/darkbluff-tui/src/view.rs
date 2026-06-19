@@ -60,6 +60,12 @@ pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
         return;
     }
 
+    // 标题态：整页首页，不走常规三段布局。
+    if matches!(state.state, SessionState::Title) {
+        draw_home(frame, area, state);
+        return;
+    }
+
     // 外层 1 格留白，面板之间靠圆角边框自然分隔。
     let inner = area.inner(Margin {
         vertical: 1,
@@ -95,6 +101,90 @@ fn draw_too_small(frame: &mut Frame, area: Rect) {
     .block(block)
     .alignment(Alignment::Center);
     frame.render_widget(text, area);
+}
+
+/// 标题态整页首页：块状双色 logo + 标语 + 菜单 + 页脚，垂直居中。
+fn draw_home(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
+    frame.render_widget(
+        Block::default().style(Style::default().bg(theme::CRUST)),
+        area,
+    );
+
+    let options: &[MenuOption] = state.menu.as_ref().map(|m| m.options).unwrap_or(&[]);
+    let selected = state.menu.as_ref().map(|m| m.selected).unwrap_or(0);
+    let menu_h = options.len() as u16;
+    // logo(6) + gap + menu
+    let content_h = 6 + 2 + menu_h;
+    let top_y = area.y + area.height.saturating_sub(content_h) / 2;
+
+    let logo = theme::logo();
+    let logo_w = 80u16.min(area.width);
+    let logo_x = area.x + area.width.saturating_sub(logo_w) / 2;
+    for (i, row) in logo.iter().enumerate() {
+        frame.render_widget(
+            Paragraph::new(logo_line(row)),
+            Rect {
+                x: logo_x,
+                y: top_y + i as u16,
+                width: logo_w,
+                height: 1,
+            },
+        );
+    }
+
+    let mut y = top_y + 6 + 2;
+    for (i, opt) in options.iter().enumerate() {
+        let sel = i == selected;
+        let style = if sel {
+            Style::default()
+                .fg(theme::MAUVE)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme::TEXT)
+        };
+        let marker = if sel { "▶ " } else { "  " };
+        let line = Line::from(format!(
+            "{marker}{}",
+            title_option_label(&opt.id, opt.label.as_str())
+        ))
+        .style(style);
+        render_centered(frame, area, y, line);
+        y += 1;
+    }
+}
+
+/// 一行 logo：DARK 部分暗紫、BLUFF 部分暗蓝。
+fn logo_line(row: &str) -> Line<'static> {
+    let dark: String = row.chars().take(theme::LOGO_DARK_COLS).collect();
+    let bluff: String = row.chars().skip(theme::LOGO_DARK_COLS).collect();
+    Line::from(vec![
+        Span::styled(dark, Style::default().fg(theme::TITLE_DARK)),
+        Span::styled(bluff, Style::default().fg(theme::TITLE_BLUFF)),
+    ])
+}
+
+/// 标题菜单项英文标签（按引擎 option id 映射，未知则回退原标签）。
+fn title_option_label<'a>(id: &str, label: &'a str) -> &'a str {
+    match id {
+        "new_game" => "New Game",
+        "continue" => "Continue",
+        "quit" => "Quit",
+        _ => label,
+    }
+}
+
+fn render_centered(frame: &mut Frame, area: Rect, y: u16, line: Line<'_>) {
+    let w = line.width() as u16;
+    let x = area.x + area.width.saturating_sub(w) / 2;
+    frame.render_widget(
+        Paragraph::new(line),
+        Rect {
+            x,
+            y,
+            width: w.max(1).min(area.width),
+            height: 1,
+        },
+    );
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
@@ -648,19 +738,19 @@ mod tests {
     #[test]
     fn renders_menu_and_confirmation_overlays() {
         let input = CommandInput::default();
-        let state = SessionState::Title;
+        let state = SessionState::ChoosingAskCharacter;
         let options = vec![
             MenuOption {
-                id: "new_game".into(),
-                label: "新游戏".into(),
+                id: "wolf".into(),
+                label: "灰狼".into(),
             },
             MenuOption {
-                id: "quit".into(),
-                label: "退出".into(),
+                id: "crow".into(),
+                label: "乌鸦".into(),
             },
         ];
         let menu = MenuView {
-            kind: MenuKind::Title,
+            kind: MenuKind::AskCharacter,
             options: &options,
             selected: 0,
         };
@@ -686,8 +776,8 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| draw(f, &vs)).unwrap();
         let text = buffer_text(term.backend().buffer());
-        assert!(text.contains("Title"), "menu title missing:\n{text}");
-        assert!(text.contains("新游戏"), "menu option missing:\n{text}");
+        assert!(text.contains("Ask Character"), "menu title missing:\n{text}");
+        assert!(text.contains("灰狼"), "menu option missing:\n{text}");
 
         // 确认浮层
         let action = ConfirmationAction::NewGame;
@@ -715,5 +805,51 @@ mod tests {
             text2.contains("overwritten"),
             "english confirm prompt missing:\n{text2}"
         );
+    }
+
+    #[test]
+    fn renders_home_screen() {
+        let options = vec![
+            MenuOption {
+                id: "new_game".into(),
+                label: "新游戏".into(),
+            },
+            MenuOption {
+                id: "quit".into(),
+                label: "退出".into(),
+            },
+        ];
+        let menu = MenuView {
+            kind: MenuKind::Title,
+            options: &options,
+            selected: 0,
+        };
+        let input = CommandInput::default();
+        let state = SessionState::Title;
+        let transcript = VecDeque::new();
+        let empty = String::new();
+        let vs = ViewState {
+            title: &empty,
+            scene_name: &empty,
+            world: World::Surface,
+            scene_text: &empty,
+            npcs: &[],
+            endings: (1, 2),
+            state: &state,
+            input: &input,
+            transcript: &transcript,
+            menu: Some(menu),
+            confirmation: None,
+            suggestions: None,
+            status: None,
+            no_motion: false,
+        };
+        let backend = TestBackend::new(100, 28);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| draw(f, &vs)).unwrap();
+        let text = buffer_text(term.backend().buffer());
+        for needle in ["New Game", "Quit"] {
+            assert!(text.contains(needle), "home missing {needle:?}:\n{text}");
+        }
     }
 }

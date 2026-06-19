@@ -174,16 +174,28 @@ impl App {
 
     fn handle_menu_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Esc => self.dispatch(Input::Cancel),
+            KeyCode::Esc => {
+                // 标题态 Esc = 存档退出（其余菜单态 Esc = 取消回探索）。
+                if matches!(self.session.state(), SessionState::Title) {
+                    self.dispatch(Input::Quit);
+                } else {
+                    self.dispatch(Input::Cancel);
+                }
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 if let Some(menu) = &mut self.menu {
-                    menu.selected = menu.selected.saturating_sub(1);
+                    let len = menu.options.len();
+                    if len > 0 {
+                        menu.selected = (menu.selected + len - 1) % len;
+                    }
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 if let Some(menu) = &mut self.menu {
-                    let last = menu.options.len().saturating_sub(1);
-                    menu.selected = (menu.selected + 1).min(last);
+                    let len = menu.options.len();
+                    if len > 0 {
+                        menu.selected = (menu.selected + 1) % len;
+                    }
                 }
             }
             KeyCode::Enter => {

@@ -32,6 +32,50 @@ pub const BLUE: Color = Color::Rgb(137, 180, 250); // #89b4fa
 /// 暗紫：非聚焦面板的边框色（整体偏紫，但弱于聚焦态的 MAUVE）。
 pub const BORDER: Color = Color::Rgb(130, 100, 180); // #8264b4
 
+// --- 首页标题（自定义块状 ASCII；DARK 暗紫 / BLUFF 暗蓝，呼应一体两面）---
+pub const TITLE_DARK: Color = Color::Rgb(160, 126, 216); // #a07ed8 暗紫
+pub const TITLE_BLUFF: Color = Color::Rgb(94, 139, 196); // #5e8bc4 暗蓝
+/// DARK 部分占的字符列数（DARK/BLUFF 分色切点；BLUFF 从此列起）。
+pub const LOGO_DARK_COLS: usize = 36;
+
+/// 块状字体（9 个字母 × 6 行，每行 8 列）。
+const LOGO_FONT: [[&str; 6]; 9] = [
+    // D
+    ["██████  ", "██   ██ ", "██    ██", "██    ██", "██   ██ ", "██████  "],
+    // A
+    ["   ██   ", "  ████  ", " ██  ██ ", "████████", "██    ██", "██    ██"],
+    // R
+    ["██████  ", "██   ██ ", "██████  ", "██  ██  ", "██   ██ ", "██    ██"],
+    // K
+    ["██   ██ ", "██  ██  ", "█████   ", "██  ██  ", "██   ██ ", "██   ██ "],
+    // B
+    ["██████  ", "██   ██ ", "██   ██ ", "██████  ", "██   ██ ", "██████  "],
+    // L
+    ["██      ", "██      ", "██      ", "██      ", "██      ", "████████"],
+    // U
+    ["██    ██", "██    ██", "██    ██", "██    ██", "██    ██", " ██████ "],
+    // F
+    ["████████", "██      ", "██      ", "██████  ", "██      ", "██      "],
+    // F
+    ["████████", "██      ", "██      ", "██████  ", "██      ", "██      "],
+];
+
+/// 拼装好的 6 行 `DARKBLUFF`（每行等宽 80 字符列）。
+pub fn logo() -> Vec<String> {
+    let mut rows = vec![String::new(); 6];
+    for row in 0..6 {
+        let mut line = String::new();
+        for (i, letter) in LOGO_FONT.iter().enumerate() {
+            line.push_str(letter[row]);
+            if i + 1 < LOGO_FONT.len() {
+                line.push(' ');
+            }
+        }
+        rows[row] = line;
+    }
+    rows
+}
+
 /// 视角主色：Surface=天蓝，Shadow=紫。
 pub fn world_color(world: World) -> Color {
     match world {
