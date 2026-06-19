@@ -21,13 +21,11 @@ use darkbluff_core::engine::{
     ConfirmationAction, Input, MenuKind, MenuOption, Selection, Session, SessionState,
 };
 use darkbluff_core::error::Result;
-use ratatui::style::{Modifier, Style};
 
 use self::suggest::strip_slash;
 use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::terminal::TerminalGuard;
-use crate::theme;
 use crate::view::{self, ViewState};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(120);
@@ -287,14 +285,8 @@ impl App {
         self.suggestions = None;
         let cmd = strip_slash(&line);
         if !cmd.trim().is_empty() {
-            self.push_line(
-                format!("> {}", cmd.trim()),
-                Style::default()
-                    .fg(theme::OVERLAY1)
-                    .add_modifier(Modifier::DIM),
-            );
+            self.dispatch(Input::Text(cmd));
         }
-        self.dispatch(Input::Text(cmd));
     }
 
     /// 行内编辑键统一处理：执行编辑后重算补全。
