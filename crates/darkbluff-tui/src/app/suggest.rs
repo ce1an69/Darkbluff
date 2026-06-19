@@ -111,7 +111,13 @@ fn arg_suggestions(tokens: &[&str], ends_space: bool, session: &Session) -> Opti
             (SuggestKind::Topic, ask_topic_options(engine, save, tokens[1]))
         }
         ("judge", 1) => (SuggestKind::Character, unjudged_character_options(engine, save)),
-        ("move", 1) => (SuggestKind::Scene, move_options(engine, save)),
+        ("move", 1) => (
+            SuggestKind::Scene,
+            move_options(engine, save)
+                .into_iter()
+                .filter(|(id, _)| !id.starts_with("__"))
+                .collect::<Vec<_>>(),
+        ),
         _ => return None,
     };
     Suggestions::new(kind, filter_opts(candidates, partial))

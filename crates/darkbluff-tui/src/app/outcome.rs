@@ -9,7 +9,7 @@ use crate::markdown::{self, StyledLine};
 use crate::theme;
 
 use super::types::{StatusKind, StatusLine};
-use super::{ActiveMenu, App};
+use super::{ActiveMenu, App, NotePanel, NoteTab, Notice};
 
 /// 转录最多保留的行数（FIFO 滚动）。
 const MAX_TRANSCRIPT: usize = 512;
@@ -21,6 +21,7 @@ impl App {
             Outcome::Dialogue { header, body, notes } => self.apply_dialogue(header, body, notes),
             Outcome::ChapterIntro { text } => self.apply_chapter_card("▌ Intro", &text),
             Outcome::ChapterOutro { text } => self.apply_chapter_card("▌ Outro", &text),
+            Outcome::Narrative { label, text } => self.apply_narrative(label, &text),
             Outcome::Notes(notes) => self.apply_notes(notes),
             Outcome::EndingReached { title, found, total } => {
                 self.apply_ending(title, found, total)
@@ -49,25 +50,26 @@ impl App {
         self.set_status(StatusKind::Info, "Press Enter to continue".into());
     }
 
-    fn apply_notes(&mut self, notes: NoteView) {
+    /// 心声 / 记忆碎片 / 旁白（走不出去）：PINK 前缀 + 正文，区别于对话与过场。
+    fn apply_narrative(&mut self, label: String, text: &str) {
         self.push_blank();
-        self.push_line("▌ Notes".into(), header_style(theme::LAVENDER));
-        for n in notes.narratives {
-            let tag = if n.is_outro { "Ending" } else { "Intro" };
-            self.push_line(format!("[{tag}] {}", n.title), Style::default().fg(theme::MAUVE));
-            self.push_md(&n.text);
-        }
-        for d in notes.dialogues {
-            self.push_line(
-                format!("{} · {}", d.character_name, d.topic_label),
-                Style::default().fg(theme::MAUVE),
-            );
-            self.push_md(&d.text);
-        }
-        for j in notes.judgments {
-            self.push_line(format!("Judge · {}", j.target_name), Style::default().fg(theme::PINK));
-            self.push_md(&j.text);
-        }
+        self.push_line(format!("▌ {label}"), header_style(theme::PINK));
+        self.push_md(text);
+        self.set_status(StatusKind::Info, "Press Enter to continue".into());
+    }
+
+    fn apply_notes(&mut self, notes: NoteView) {
+        // 默认聚焦首个有内容的标签；全空则回叙事。
+        let tab = [NoteTab::Narrative, NoteTab::Dialogue, NoteTab::Judgment, NoteTab::Voice]
+            .into_iter()
+            .find(|t| match *t {
+                NoteTab::Narrative => !notes.narratives.is_empty(),
+                NoteTab::Dialogue => !notes.dialogues.is_empty(),
+                NoteTab::Judgment => !notes.judgments.is_empty(),
+                NoteTab::Voice => !notes.voices.is_empty(),
+            })
+            .unwrap_or(NoteTab::Narrative);
+        self.note_panel = Some(NotePanel { view: notes, tab });
     }
 
     fn apply_ending(&mut self, title: String, found: usize, total: usize) {
@@ -81,6 +83,15 @@ impl App {
     }
 
     fn apply_message(&mut self, message: Message) {
+        // warning 级额外在顶部通知条提示（存档恢复 / 内容失效等）。
+        if matches!(message.level, MessageLevel::Warning) {
+            if let Some(first) = message.lines.first() {
+                self.notice = Some(Notice {
+                    warn: true,
+                    text: first.clone(),
+                });
+            }
+        }
         // 多行（如 help）进转录可读可滚；单行瞬时反馈进输入框右侧状态。
         if message.lines.len() > 1 {
             self.push_blank();

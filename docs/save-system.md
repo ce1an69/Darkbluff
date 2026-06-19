@@ -89,9 +89,10 @@
 | `judgments_made` | 已审判的记录（按章节分组；`judgment` 为审判点 id，`result_snapshot` 为审判剧情快照路径、供 note「审判」标签页回顾）。条件表达式求值时合并 `chapter_path` 中当前及之前所有章节的事实（见 [content-engine.md](content-engine.md)「FactSet」） |
 | `viewed_intros` | 已展示的章节开场文本快照路径（按章节分组，chapter_id → 相对路径），供 note「叙事」标签页回顾；章节无 `intro` 则无条目 |
 | `viewed_outros` | 已展示的终章结局文本快照路径（按章节分组，chapter_id → 相对路径），供 note「叙事」标签页回顾；非终章或无 `outro` 的终章无条目 |
+| `viewed_narrative` | 已展示的叙事触发器（心声 / 碎片 / 走不出去）记录（按章节分组，每条含 `id` + 快照路径）；展示记录，**不进检查点长度截断**，跨章回滚随章节清理，与 `viewed_intros` 同构。供 note「心声」标签页回顾 |
 | `chapter_path` | 玩家经过的章节路径（用于当前流程的树状高亮） |
 | `checkpoints` | 自动创建的检查点，记录位置 + 当前章节三个权威数组的长度 |
-| `discovered` | **append-only** 的探索记忆：到过的章节、达成的结局、问过的话题。任何回滚都不截断此字段。三个子集均为 **set 语义**（追加时去重：重复到达同一章节/结局、或重复问同一话题，不产生重复条目）；其中 `chapters` 为**有序去重**（保留首次到达顺序），供 `map` 的章节树展示与探索进度排序。「已发现结局 X / Y」等计数基于去重后的集合。`chapters`/`endings` 序列化为 JSON 数组；`topics` 序列化为按章节分组的对象（chapter → 话题 id 数组），追加时去重 |
+| `discovered` | **append-only** 的探索记忆：到过的章节、达成的结局、问过的话题。任何回滚都不截断此字段。四个子集均为 **set 语义**（追加时去重：重复到达同一章节/结局、或重复问同一话题，不产生重复条目）；其中 `chapters` 为**有序去重**（保留首次到达顺序），供 `map` 的章节树展示与探索进度排序。「已发现结局 X / Y」等计数基于去重后的集合。`chapters`/`endings` 序列化为 JSON 数组；`topics` 序列化为按章节分组的对象（chapter → 话题 id 数组），追加时去重；`triggers` 序列化为 JSON 数组（已触发的叙事触发器 id，含走不出去的 `leave_attempt`），追加时去重 |
 
 **字段命名约定**: 存档中所有内容引用均为 id（与内容文件中的 id 完全一致，无第二套标识）。
 
@@ -101,6 +102,7 @@
 - 自动推进进入 `ending: true` 的章节 → 追加到 `discovered.chapters`（注意：此时只记章节，不记结局）
 - 在终章中完成最后一个必要审判时（即玩家结束终章体验）→ 追加该终章 id 到 `discovered.endings`
 - 通过 `ask` 查看某话题 → `{character}.{topic}` 追加到 `discovered.topics[chapter]`（去重）
+- 触发叙事触发器（心声 / 碎片 / 走不出去）→ 触发器 id 追加到 `discovered.triggers`（去重）；回滚后同一 id 不再重复触发
 
 > **`discovered` 子集语义**: `chapters` / `endings` / `topics` 都是「玩家曾经体验过什么」的集合记忆，追加时去重，不参与任何跳转逻辑。其中 `discovered.topics` 记录玩家在任意周目或被回滚的尝试中**曾问过**的话题（按章节分组的 `{character}.{topic}` 列表），供 map 面板按角色聚合标注「话题 X/Y」（见 [architecture.md](architecture.md)「Map 面板」），为重玩提供目标感。它与 `viewed_dialogues`（当前流程的对话快照、可被回滚）职责不同。
 
@@ -257,6 +259,7 @@ save/
 
 - 加载存档时直接用 id 匹配当前内容（id 与内容文件一致，无需映射层）
 - 如果某个 id 无法解析（内容已被删除或改名），保留原始存档记录但在运行时跳过对应内容，并输出 warning
+- **恢复被中断的章节推进**: 若加载的存档中当前章 `required_judgments` 已全部完成却仍停在 `Exploring`（上次在「审判完成 + 审判后心声展示中」退出，`drain_or_advance` 把推进挂到了不进存档的 `pending` 上），`continue_with` 检测到此状态并补回自动推进，避免「审判已完成却永不推进」的软锁。已触发的心声因 `discovered.triggers` 永久记录而不会重复展示。
 
 ## 存档健壮性
 

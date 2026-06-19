@@ -111,11 +111,11 @@ impl Session {
             .get_character(character)
             .map(|c| c.name.clone())
             .unwrap_or_else(|| character.into());
-        Outcome::Dialogue {
+        self.then_narrative(Outcome::Dialogue {
             header: format!("{char_name} - {} [{}]", t.label, world.label()),
             body,
             notes,
-        }
+        })
     }
 
     fn record_dialogue_view(

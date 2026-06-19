@@ -118,6 +118,9 @@ pub struct Scene {
     /// 单向连接（不补反向）。
     #[serde(default)]
     pub one_way_connections: Vec<String>,
+    /// 可选：尝试离开镇子的失败叙事（仅边缘场景用，承载「走不出去」）。
+    #[serde(default)]
+    pub exit_attempt: Option<ExitAttempt>,
     pub description: SceneDescription,
 }
 
@@ -169,6 +172,11 @@ pub struct Chapter {
     /// 自动推进前必须完成的审判点 id；省略（None）= 本章全部审判。
     /// 显式空数组 `[]` 不合法，由启动校验拦截。
     pub required_judgments: Option<Vec<String>>,
+    /// 叙事触发器（心声 / 记忆碎片 / 旁白）：状态驱动，引擎在状态变更点用 FactSet
+    /// 求值 `when`，命中且未触发时展示 `text`。`id` 全局唯一、发布冻结，同时作为
+    /// 条件标记进入 FactSet（碎片可解锁话题 / 影响跳转）。可选。
+    #[serde(default)]
+    pub narrative: Vec<Narrative>,
     /// 非终章必须提供；终章必须为 None。由启动校验保证。
     pub next: Option<NextConfig>,
 }
@@ -194,6 +202,35 @@ pub struct Clue {
     /// 触发该线索的世界版本。
     pub world: World,
 }
+
+/// 叙事触发器（心声 / 记忆碎片 / 旁白）。
+///
+/// 状态驱动：引擎在状态变更点用 FactSet 求值 `when`，命中且未触发时展示 `text`。
+/// `id` 全局唯一、发布冻结，同时进存档 `discovered.triggers`（去重）与 FactSet（条件标记）。
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Narrative {
+    /// 触发器 id（全局唯一，同时作为条件标记）。
+    pub id: String,
+    /// 触发条件；省略（None）= 进入本章即触发。
+    #[serde(default)]
+    pub when: Option<Condition>,
+    /// 展示与 note 归类用的前缀（如「心声」「记忆碎片」）。
+    pub label: String,
+    /// 文本（相对章节目录的 Markdown 路径）。
+    pub text: String,
+}
+
+/// 场景的「尝试离开」失败叙事（承载「走不出去」规则）。
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ExitAttempt {
+    /// 文本（相对 `data/` 根的 Markdown 路径）。
+    pub text: String,
+}
+
+/// 走不出去触发器的固定 id（与场景 `exit_attempt` 配合，写入 `discovered.triggers`
+/// 与 `viewed_narrative`）。定义在 content 层供 checker 校验与 engine 运行时共享，
+/// 避免重复。作者内容不得声明此 id（checker 拒绝）。
+pub const LEAVE_ATTEMPT_TRIGGER: &str = "leave_attempt";
 
 /// 将 `{character}.{topic}` 形式的来源字符串解析为 `(character_id, topic_id)`。
 /// 缺少点号或存在多余点号时返回 `None`。

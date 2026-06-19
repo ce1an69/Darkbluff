@@ -184,6 +184,8 @@ pub(crate) struct LoadedContent {
     pub(crate) intro_text: HashMap<String, String>,
     pub(crate) outro_text: HashMap<String, String>,
     pub(crate) result_text: HashMap<(String, String), String>,
+    pub(crate) narrative_text: HashMap<(String, String), String>,
+    pub(crate) exit_attempt_text: HashMap<String, String>,
     pub(crate) reachable: HashMap<String, Vec<String>>,
     pub(crate) root_chapter: Option<String>,
 }
@@ -201,6 +203,14 @@ pub(crate) fn load_all(src: &dyn DataSource) -> Result<LoadedContent> {
             }
         }
     }
+    let mut exit_attempt_text: HashMap<String, String> = HashMap::new();
+    for s in &scenes {
+        if let Some(ea) = &s.exit_attempt {
+            if let Ok(text) = src.read(&ea.text) {
+                exit_attempt_text.insert(s.id.clone(), text);
+            }
+        }
+    }
 
     let mut chapters = Vec::new();
     let mut judgments: HashMap<String, Vec<Judgment>> = HashMap::new();
@@ -210,6 +220,7 @@ pub(crate) fn load_all(src: &dyn DataSource) -> Result<LoadedContent> {
     let mut intro_text: HashMap<String, String> = HashMap::new();
     let mut outro_text: HashMap<String, String> = HashMap::new();
     let mut result_text: HashMap<(String, String), String> = HashMap::new();
+    let mut narrative_text: HashMap<(String, String), String> = HashMap::new();
 
     for name in src.list_dir("chapters")? {
         let chap_yaml = format!("chapters/{name}/chapter.yaml");
@@ -252,6 +263,11 @@ pub(crate) fn load_all(src: &dyn DataSource) -> Result<LoadedContent> {
                 result_text.insert((cid.clone(), j.id.clone()), t);
             }
         }
+        for n in &ch.narrative {
+            if let Ok(t) = src.read(&format!("{base}/{}", n.text)) {
+                narrative_text.insert((cid.clone(), n.id.clone()), t);
+            }
+        }
 
         judgments.insert(cid.clone(), jlist);
         clues.insert(cid.clone(), clist);
@@ -276,6 +292,8 @@ pub(crate) fn load_all(src: &dyn DataSource) -> Result<LoadedContent> {
         intro_text,
         outro_text,
         result_text,
+        narrative_text,
+        exit_attempt_text,
     })
 }
 

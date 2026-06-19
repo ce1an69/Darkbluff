@@ -159,6 +159,7 @@ darkbluff --data-dir <path>      # 指定内容数据目录（当前开发模式
 |------|------|
 | `Title` | 标题菜单（新游戏 / 继续 / 退出） |
 | `ShowingIntro` | 章节开场/过场文本（`intro`）展示中，玩家确认后进入 `Exploring`；无 `intro` 则跳过 |
+| `ShowingNarrative` | 叙事触发器（心声 / 碎片 / 旁白）展示中，玩家确认后继续 drain 下一个，或回到 `Exploring` / 执行被推迟的章节推进 |
 | `Exploring` | 章节内自由探索（ask / move / gaze / map / note / help / quit 可用） |
 | `ChoosingAskCharacter` | `ask` 无参数时选择当前场景在场角色 |
 | `ChoosingAskTopic` | `ask` 第二步：选择该角色可问话题 |
@@ -176,7 +177,7 @@ darkbluff --data-dir <path>      # 指定内容数据目录（当前开发模式
 - `Input::Confirm(bool)` 用于二次确认，`Input::Cancel` 用于取消菜单/确认，`Input::Ack` 用于继续 intro/outro/ending。
 - `Outcome::Message(Message)` 返回带级别的领域消息；`MessageLevel` 只表达 info/warning/error 语义，不绑定具体 UI 样式。
 - `Outcome::MenuRequested { kind, prompt, options }` 与 `Outcome::ConfirmationRequested { action, prompt }` 只描述领域意图，不描述控件形态。
-- `Outcome::ChapterIntro` / `ChapterOutro` / `Dialogue` / `Notes` / `EndingReached` / `QuitRequested` 分别表达叙事、对话、笔记、结局与退出意图。
+- `Outcome::ChapterIntro` / `ChapterOutro` / `Narrative` / `Dialogue` / `Notes` / `EndingReached` / `QuitRequested` 分别表达章节开场/结局、心声碎片、对话、笔记、结局与退出意图。
 
 ## 设计取舍
 

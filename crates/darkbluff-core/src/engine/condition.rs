@@ -29,6 +29,13 @@ pub fn build_factset(save: &Save) -> FactSet {
             }
         }
     }
+    // 叙事触发器 id 作为条件标记：取自 append-only 的 `discovered.triggers`（任何回滚都不
+    // 截断），而非 `viewed_narrative`（随章清理）。这样「碎片作为事实」的语义与「不重复
+    // 触发」一致——回滚不会让 when 链式依赖（T2 when:[T1]）因 T1 快照被清而失效，
+    // 也不会在审判回滚后残留与 discovered 矛盾的事实。
+    for t in &save.discovered.triggers {
+        facts.insert(t.clone());
+    }
     facts
 }
 

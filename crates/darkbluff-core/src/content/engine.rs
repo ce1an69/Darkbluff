@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use crate::content::condition::eval;
 use crate::content::dialogue::DialogueBook;
 use crate::content::loader::{load_all, LoadedContent};
-use crate::content::models::{Chapter, Character, Clue, Judgment, Scene, Topic};
+use crate::content::models::{Chapter, Character, Clue, Judgment, Narrative, Scene, Topic};
 use crate::error::Result;
 use crate::world::World;
 
@@ -45,6 +45,10 @@ pub struct ContentEngine {
     outro_text: HashMap<String, String>,
     /// 审判剧情文本：(chapter, judgment_id) → 文本。
     result_text: HashMap<(String, String), String>,
+    /// 叙事触发器文本：(chapter, trigger_id) → 文本。
+    narrative_text: HashMap<(String, String), String>,
+    /// 场景「尝试离开」失败文本：scene → 文本。
+    exit_attempt_text: HashMap<String, String>,
     /// 场景可达连接（含自动补全的反向连接与 one_way）。
     reachable: HashMap<String, Vec<String>>,
     /// 首章（唯一根节点）；校验层保证有且仅有一个，否则为 None。
@@ -70,6 +74,8 @@ impl ContentEngine {
             intro_text,
             outro_text,
             result_text,
+            narrative_text,
+            exit_attempt_text,
             reachable,
             root_chapter,
         } = lc;
@@ -88,6 +94,8 @@ impl ContentEngine {
             intro_text,
             outro_text,
             result_text,
+            narrative_text,
+            exit_attempt_text,
             reachable,
             root_chapter,
         })
@@ -266,6 +274,36 @@ impl ContentEngine {
     }
     pub fn get_outro_text(&self, chapter: &str) -> Option<&str> {
         self.outro_text.get(chapter).map(|s| s.as_str())
+    }
+
+    // ----- 叙事触发器（心声 / 记忆碎片）-----
+
+    /// 本章定义的全部叙事触发器（原始数据；可见性由引擎层用 FactSet 求值）。
+    pub fn get_narrative(&self, chapter: &str) -> &[Narrative] {
+        self.get_chapter(chapter)
+            .map(|c| c.narrative.as_slice())
+            .unwrap_or(&[])
+    }
+    pub fn get_narrative_item(&self, chapter: &str, id: &str) -> Option<&Narrative> {
+        self.get_narrative(chapter).iter().find(|n| n.id == id)
+    }
+    pub fn get_narrative_text(&self, chapter: &str, id: &str) -> Option<&str> {
+        self.narrative_text
+            .get(&(chapter.to_string(), id.to_string()))
+            .map(|s| s.as_str())
+    }
+
+    // ----- 场景「走不出去」-----
+
+    /// 场景的「尝试离开」失败文本（承载「走不出去」规则）。
+    pub fn scene_exit_attempt_text(&self, scene: &str) -> Option<&str> {
+        self.exit_attempt_text.get(scene).map(|s| s.as_str())
+    }
+    /// 场景是否定义了「尝试离开」（供 move 菜单追加伪出口）。
+    pub fn scene_has_exit_attempt(&self, scene: &str) -> bool {
+        self.get_scene(scene)
+            .map(|s| s.exit_attempt.is_some())
+            .unwrap_or(false)
     }
 
     // ----- 章节跳转 -----

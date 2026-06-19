@@ -51,6 +51,32 @@ fn err_msgs(report: &CheckReport) -> Vec<String> {
 }
 
 #[test]
+fn rejects_reserved_id_namespace() {
+    // 场景 id 占用保留前缀 "__"；叙事触发器 id 占用走不出去的保留 id "leave_attempt"。
+    let src = InMemorySource::new()
+        .insert("scenes/__leave.yaml", "id: __leave\nname: 边缘\ndescription:\n  surface: a.md\n  shadow: b.md\n")
+        .insert("a.md", "表面。")
+        .insert("b.md", "影子。")
+        .insert("characters/wolf.yaml", "id: wolf\nname: 灰狼\n")
+        .insert("chapters/c1/chapter.yaml", "id: c1\ntitle: 首\nscenes: [__leave]\nstarting_scene: __leave\ncharacters:\n  - id: wolf\n    topics: []\nrequired_judgments: [judge_wolf]\nnext:\n  default: c2\nnarrative:\n  - id: leave_attempt\n    label: 心声\n    text: v.md\n")
+        .insert("chapters/c1/judgments.yaml", "- id: judge_wolf\n  target: wolf\n  result: r.md\n")
+        .insert("chapters/c1/r.md", "审判。")
+        .insert("chapters/c1/v.md", "心声。")
+        .insert("chapters/c2/chapter.yaml", "id: c2\ntitle: 终\nending: true\nscenes: [__leave]\nstarting_scene: __leave\ncharacters:\n  - id: wolf\n    topics: []\nrequired_judgments: [judge_wolf_final]\n")
+        .insert("chapters/c2/judgments.yaml", "- id: judge_wolf_final\n  target: wolf\n  result: r.md\n")
+        .insert("chapters/c2/r.md", "终审。");
+    let errs = err_msgs(&check_source(&src));
+    assert!(
+        errs.iter().any(|m| m.contains("__leave") && m.contains("保留")),
+        "应拒绝 __ 前缀场景 id: {errs:?}"
+    );
+    assert!(
+        errs.iter().any(|m| m.contains("leave_attempt") && m.contains("保留")),
+        "应拒绝保留触发器 id: {errs:?}"
+    );
+}
+
+#[test]
 fn valid_dataset_has_no_errors() {
     let r = check_source(&valid_source());
     assert!(!r.has_errors(), "unexpected errors: {:?}", err_msgs(&r));

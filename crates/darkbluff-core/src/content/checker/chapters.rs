@@ -7,6 +7,13 @@ use crate::world::World;
 
 use super::Checker;
 
+/// 引擎运行时保留的 id 命名空间：`__` 前缀（move 伪出口 `__leave`）与走不出去触发器
+/// [`LEAVE_ATTEMPT_TRIGGER`](crate::content::LEAVE_ATTEMPT_TRIGGER)。作者内容不得声明，
+/// 否则与内部哨兵碰撞（场景不可达 / 触发器互相遮蔽）。
+fn is_reserved_id(id: &str) -> bool {
+    id.starts_with("__") || id == crate::content::LEAVE_ATTEMPT_TRIGGER
+}
+
 impl<'a> Checker<'a> {
     /// 全局外键 id 唯一且非空（scene / character / chapter / clue / judgment）。
     pub(crate) fn check_id_uniqueness(&mut self) {
@@ -27,6 +34,9 @@ impl<'a> Checker<'a> {
             for j in self.eng.get_judgments(cid) {
                 self.count_id(&mut counts, &j.id, "审判点");
             }
+            for n in self.eng.get_narrative(cid) {
+                self.count_id(&mut counts, &n.id, "叙事触发器");
+            }
         }
         for (id, n) in &counts {
             if *n > 1 {
@@ -39,15 +49,31 @@ impl<'a> Checker<'a> {
         if id.is_empty() {
             self.err(format!("存在空的 {label} id"));
         }
+        if is_reserved_id(id) {
+            self.err(format!(
+                "{label} id \"{id}\" 占用了引擎保留命名空间（\"__\" 前缀或走不出去触发器 \"leave_attempt\"），禁止作者使用"
+            ));
+        }
         *counts.entry(id.to_string()).or_insert(0) += 1;
     }
 
     pub(crate) fn check_scenes(&mut self) {
         for sid in self.eng.scene_ids() {
             self.check_scene_connections(sid);
+            self.check_scene_exit_attempt(sid);
         }
         for sid in self.eng.scene_ids() {
             self.check_dead_end(sid);
+        }
+    }
+
+    /// exit_attempt 文本文件存在（声明了 exit_attempt 的场景）。
+    fn check_scene_exit_attempt(&mut self, scene_id: &str) {
+        let Some(scene) = self.eng.get_scene(scene_id) else {
+            return;
+        };
+        if scene.exit_attempt.is_some() && self.eng.scene_exit_attempt_text(scene_id).is_none() {
+            self.err(format!("场景 {scene_id} 的 exit_attempt 文件缺失"));
         }
     }
 
@@ -94,6 +120,25 @@ impl<'a> Checker<'a> {
         self.check_chapter_characters(cid, ch);
         self.check_chapter_judgments(cid, ch);
         self.check_chapter_clues(cid, ch);
+        self.check_chapter_narrative(cid, ch);
+    }
+
+    /// 叙事触发器：label 非空、when 条件 id 有效、文本存在（id 唯一性已在
+    /// `check_id_uniqueness` 全局校验）。
+    fn check_chapter_narrative(&mut self, cid: &str, ch: &Chapter) {
+        for n in &ch.narrative {
+            if n.label.trim().is_empty() {
+                self.warn(format!("章节 {cid} 叙事触发器 {} 缺少 label", n.id));
+            }
+            if let Some(cond) = &n.when {
+                for id in super::cond_ids(cond) {
+                    self.validate_condition_id(cid, id);
+                }
+            }
+            if self.eng.get_narrative_text(cid, &n.id).is_none() {
+                self.err(format!("章节 {cid} 叙事触发器 {} 的 text 文件缺失", n.id));
+            }
+        }
     }
 
     /// 标题 / next 必要性 / outro / intro / starting_scene。

@@ -192,9 +192,10 @@ pub(super) fn draw_input(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
             "Confirm",
             "y / Enter confirm · n / Esc cancel",
         ),
-        SessionState::ShowingIntro | SessionState::ShowingOutro | SessionState::Ending => {
-            render_hint(frame, inner, "Continue", "press Enter")
-        }
+        SessionState::ShowingIntro
+        | SessionState::ShowingNarrative
+        | SessionState::ShowingOutro
+        | SessionState::Ending => render_hint(frame, inner, "Continue", "press Enter"),
         _ => render_hint(
             frame,
             inner,

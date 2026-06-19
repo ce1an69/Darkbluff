@@ -83,6 +83,9 @@ fn renders_exploring_layout_npcs_and_palette() {
         confirmation: None,
         suggestions: Some(&suggestions),
         status: None,
+        note: None,
+        notice: None,
+        map: None,
         no_motion: false,
     };
 
@@ -124,6 +127,9 @@ fn renders_menu_and_confirmation_overlays() {
         confirmation: None,
         suggestions: None,
         status: None,
+        note: None,
+        notice: None,
+        map: None,
         no_motion: false,
     };
     let backend = TestBackend::new(100, 28);
@@ -150,6 +156,9 @@ fn renders_menu_and_confirmation_overlays() {
         confirmation: Some(&action),
         suggestions: None,
         status: None,
+        note: None,
+        notice: None,
+        map: None,
         no_motion: false,
     };
     term.draw(|f| draw(f, &vs2)).unwrap();
@@ -183,6 +192,9 @@ fn renders_home_screen() {
         confirmation: None,
         suggestions: None,
         status: None,
+        note: None,
+        notice: None,
+        map: None,
         no_motion: false,
     };
     let backend = TestBackend::new(100, 28);
@@ -191,5 +203,66 @@ fn renders_home_screen() {
     let text = buffer_text(term.backend().buffer());
     for needle in ["New Game", "Quit"] {
         assert!(text.contains(needle), "home missing {needle:?}:\n{text}");
+    }
+}
+
+#[test]
+fn renders_map_panel_tree_and_checkpoints() {
+    use crate::view::{MapGroup, MapRow};
+    let groups = vec![
+        MapGroup {
+            title: "失踪的屠夫".into(),
+            ending: false,
+            is_current: true,
+            unseen_branches: 1,
+            topic_progress: Some((2, 3)),
+            checkpoints: vec![
+                MapRow { flat_index: 0, label: "章节开始 · 酒馆".into() },
+                MapRow { flat_index: 1, label: "审判前 · 酒馆".into() },
+            ],
+        },
+        MapGroup {
+            title: "酒馆真相".into(),
+            ending: true,
+            is_current: false,
+            unseen_branches: 0,
+            topic_progress: None,
+            checkpoints: vec![],
+        },
+    ];
+    let options = vec![
+        MenuOption { id: "ckpt_c1_start".into(), label: "章节开始 · 酒馆".into() },
+        MenuOption { id: "ckpt_before".into(), label: "审判前 · 酒馆".into() },
+    ];
+    let menu = MenuView { kind: MenuKind::Checkpoint, options: &options, selected: 0 };
+    let input = CommandInput::default();
+    let state = SessionState::ChoosingCheckpoint;
+    let transcript = VecDeque::new();
+    let empty = String::new();
+    let vs = ViewState {
+        title: &empty,
+        scene_name: &empty,
+        world: World::Surface,
+        scene_text: &empty,
+        npcs: &[],
+        endings: (1, 2),
+        state: &state,
+        input: &input,
+        transcript: &transcript,
+        menu: Some(menu),
+        confirmation: None,
+        suggestions: None,
+        status: None,
+        note: None,
+        notice: None,
+        map: Some(&groups),
+        no_motion: false,
+    };
+    let backend = TestBackend::new(100, 28);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| draw(f, &vs)).unwrap();
+    let text = buffer_text(term.backend().buffer());
+    for needle in ["Map", "失踪的屠夫", "酒馆真相", "★", "???", "话题 2/3", "章节开始"] {
+        assert!(text.contains(needle), "map missing {needle:?}:\n{text}");
     }
 }

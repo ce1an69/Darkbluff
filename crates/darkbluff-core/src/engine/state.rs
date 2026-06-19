@@ -25,6 +25,18 @@ pub(crate) struct Pending {
     pub(crate) action: PendingAction,
 }
 
+/// 叙事心声序列结束后的后续动作：回放一个 Outcome，或执行被推迟的章节推进。
+#[derive(Debug, Clone)]
+pub(crate) enum NarrativeFollowUp {
+    /// 回放暂存的基础 Outcome（对话 / 消息 / 场景描述等）。
+    Outcome(Outcome),
+    /// 审判已完成、心声展示完毕后再推进章节（让「审判后碎片」得以触发）。
+    AdvanceAfterJudgment {
+        prelude: Option<String>,
+        map_hint: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum PendingAction {
     None,
@@ -38,6 +50,10 @@ pub(crate) enum PendingAction {
     },
     Intro {
         create_checkpoint: bool,
+    },
+    /// 叙事触发器展示中；`follow_up` 为心声序列结束后执行的动作。
+    Narrative {
+        follow_up: Option<NarrativeFollowUp>,
     },
     Confirm(ConfirmationAction),
 }
@@ -154,6 +170,10 @@ impl Session {
             (SessionState::ShowingIntro, Input::Ack)
             | (SessionState::ShowingIntro, Input::Cancel) => self.ack_intro(),
             (SessionState::ShowingIntro, _) => Outcome::Ignored,
+
+            (SessionState::ShowingNarrative, Input::Ack)
+            | (SessionState::ShowingNarrative, Input::Cancel) => self.ack_narrative(),
+            (SessionState::ShowingNarrative, _) => Outcome::Ignored,
 
             (SessionState::ShowingOutro, Input::Ack)
             | (SessionState::ShowingOutro, Input::Cancel) => self.to_ending(),

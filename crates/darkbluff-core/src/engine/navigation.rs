@@ -17,7 +17,7 @@ impl Session {
         };
         let mut msgs = vec![format!("[已切换到 {eye}]")];
         msgs.extend(self.scene_description_messages());
-        Outcome::Message(Message::info(msgs))
+        self.then_narrative(Outcome::Message(Message::info(msgs)))
     }
 
     pub(crate) fn do_move(&mut self, dest: Option<String>) -> Outcome {
@@ -43,6 +43,9 @@ impl Session {
                 }
             }
             Some(d) => {
+                if d == "__leave" {
+                    return self.attempt_leave();
+                }
                 let cur = self.save.current_scene.clone();
                 let reachable = self.engine.get_reachable_scenes(&cur);
                 if !reachable.iter().any(|s| *s == d) {
@@ -51,7 +54,8 @@ impl Session {
                 self.save.current_scene = d;
                 self.persist();
                 self.state = SessionState::Exploring;
-                Outcome::Message(Message::info(self.scene_description_messages()))
+                let base = Outcome::Message(Message::info(self.scene_description_messages()));
+                self.then_narrative(base)
             }
         }
     }

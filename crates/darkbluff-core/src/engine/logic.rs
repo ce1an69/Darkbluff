@@ -98,9 +98,9 @@ pub fn unjudged_character_options(engine: &ContentEngine, save: &Save) -> Vec<Op
         .collect()
 }
 
-/// 当前场景可达的目的地场景。
+/// 当前场景可达的目的地场景；边缘场景额外追加「试着离开镇子」伪出口（承载「走不出去」）。
 pub fn move_options(engine: &ContentEngine, save: &Save) -> Vec<Option> {
-    engine
+    let mut opts: Vec<Option> = engine
         .get_reachable_scenes(&save.current_scene)
         .into_iter()
         .filter_map(|sid| {
@@ -108,7 +108,11 @@ pub fn move_options(engine: &ContentEngine, save: &Save) -> Vec<Option> {
                 .get_scene(sid)
                 .map(|s| (sid.to_string(), s.name.clone()))
         })
-        .collect()
+        .collect();
+    if engine.scene_has_exit_attempt(&save.current_scene) {
+        opts.push(("__leave".into(), "试着离开镇子".into()));
+    }
+    opts
 }
 
 #[cfg(test)]

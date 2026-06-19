@@ -29,6 +29,8 @@
 | `Clue` | 线索，纯逻辑层机制；由 `ask` 触发对话时收集，用于解锁话题 |
 | `Judgment` | 审判点，`target` 指向某角色（章级操作，不要求角色在场），触发该角色一段固定 `result` 审判剧情；一章内一个角色一个审判点 |
 | `appears_in` | 角色本章出场的场景列表；`ask` 校验目标角色在场（`judge` 为章级操作，不校验 `appears_in`） |
+| 🆕 `Narrative` | 叙事触发器（心声 / 记忆碎片 / 旁白）：章节数据 `narrative` 项，状态驱动——`when` 命中且未触发时展示 `text`；`id` 全局唯一、进 `discovered.triggers` 与 FactSet（条件标记） |
+| 🆕 `exit_attempt` | 场景可选字段，承载「走不出去」规则；`move` 伪出口 `__leave` 触发，不移动 |
 
 ## 3. 标识符 (Identifiers)
 
@@ -74,6 +76,7 @@
 | `viewed_dialogues` | 已查看对话索引 + 快照路径（按章节分组） |
 | 🆕 `viewed_intros` | 已展示的章节开场文本快照路径（按章节分组） |
 | 🆕 `viewed_outros` | 已展示的终章结局文本快照路径（按章节分组） |
+| 🆕 `viewed_narrative` | 已展示的叙事触发器记录（按章节分组，id + 快照路径）；展示记录，跨章回滚随章节清理 |
 | `judgments_made` | 已审判记录（`judgment` + `result_snapshot`，按章节分组） |
 | `chapter_path` | 当前流程经过的章节路径（树状高亮 + `map` 跨章回滚范围来源） |
 | `checkpoints` | 自动检查点，记录位置 + 当前章节三数组长度 |
@@ -94,7 +97,7 @@
 | 命名 | 解释 |
 |------|------|
 | `discovered` | append-only 探索记忆，任何回滚都不截断；set 语义（去重） |
-| `discovered.chapters` / `.endings` / `.topics` | 曾到过的章节 / 曾达成的结局 / 曾问过的话题（按章节分组） |
+| `discovered.chapters` / `.endings` / `.topics` / `.triggers` | 曾到过的章节 / 曾达成的结局 / 曾问过的话题 / 曾触发的叙事触发器（按章节分组；triggers 含心声/碎片/走不出去） |
 | 🆕 有序去重 | `chapters` 保留首次到达顺序，供 `map` 章节树展示与探索进度排序 |
 | 🆕 话题进度标注 | map 面板按角色聚合显示「话题 X/Y」：X = `discovered.topics` 中该角色本章已问话题数，Y = 该角色本章可问话题总数（不含永久不可问）；只给计数不给未问 label（剧透安全） |
 
@@ -138,7 +141,7 @@
 
 | 命名 | 解释 |
 |------|------|
-| SessionState | `Title` / `ShowingIntro` / `Exploring` / `ChoosingAskCharacter` / `ChoosingAskTopic` / `ChoosingJudgeCharacter` / `ChoosingMove` / `ChoosingCheckpoint` / `Confirming` / `ShowingOutro` / `Ending` |
+| SessionState | `Title` / `ShowingIntro` / `ShowingNarrative` / `Exploring` / `ChoosingAskCharacter` / `ChoosingAskTopic` / `ChoosingJudgeCharacter` / `ChoosingMove` / `ChoosingCheckpoint` / `Confirming` / `ShowingOutro` / `Ending` |
 | 🆕 `ShowingIntro` | 章节开场/过场文本（`intro`）展示中，确认后进入 `Exploring` |
 | 🆕 `ShowingOutro` | 终章结局文本（`outro`）展示中，确认后进入 `Ending`；无 `outro` 则跳过 |
 | 🆕 `ChoosingAskCharacter` / `ChoosingAskTopic` | `ask` 无参数的两步菜单：当前场景在场角色 → 可问话题 |

@@ -7,6 +7,8 @@
 
 mod home;
 mod layout;
+mod map_panel;
+mod note_panel;
 mod overlays;
 mod text;
 
@@ -19,11 +21,11 @@ use std::collections::VecDeque;
 use darkbluff_core::engine::{ConfirmationAction, MenuKind, MenuOption, SessionState};
 use darkbluff_core::world::World;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
-use ratatui::style::Style;
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::style::{Modifier, Style};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 
-use crate::app::{NpcInfo, StatusLine, Suggestions};
+use crate::app::{NpcInfo, NotePanel, Notice, StatusLine, Suggestions};
 use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::theme;
@@ -35,6 +37,26 @@ pub struct MenuView<'a> {
     pub kind: MenuKind,
     pub options: &'a [MenuOption],
     pub selected: usize,
+}
+
+/// map 面板里一个章节分组：标题 + 标记 + 话题进度 + 其下的可选择检查点。
+#[derive(Debug, Clone, Default)]
+pub struct MapGroup {
+    pub title: String,
+    pub ending: bool,
+    pub is_current: bool,
+    /// 未到过但可见的分支数（显示为 ???）。
+    pub unseen_branches: usize,
+    /// (已问话题数, 本章可问话题总数)。
+    pub topic_progress: Option<(usize, usize)>,
+    pub checkpoints: Vec<MapRow>,
+}
+
+/// map 面板里一行可选择的检查点；`flat_index` 对应引擎 checkpoint 菜单的扁平下标。
+#[derive(Debug, Clone)]
+pub struct MapRow {
+    pub flat_index: usize,
+    pub label: String,
 }
 
 /// 一帧渲染所需的全部只读视图状态（由 app 层组装）。
@@ -52,6 +74,9 @@ pub struct ViewState<'a> {
     pub confirmation: Option<&'a ConfirmationAction>,
     pub suggestions: Option<&'a Suggestions>,
     pub status: Option<&'a StatusLine>,
+    pub note: Option<&'a NotePanel>,
+    pub notice: Option<&'a Notice>,
+    pub map: Option<&'a [MapGroup]>,
     pub no_motion: bool,
 }
 
@@ -86,12 +111,31 @@ pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
     layout::draw_scene(frame, scene_a, state);
     layout::draw_input(frame, input_a, state);
 
-    if let Some(menu) = &state.menu {
+    if let Some(notice) = state.notice {
+        draw_notice(frame, header_a, notice);
+    }
+    if let Some(groups) = state.map {
+        let selected = state.menu.as_ref().map(|m| m.selected).unwrap_or(0);
+        map_panel::draw_map_panel(frame, inner, groups, selected);
+    } else if let Some(menu) = &state.menu {
         overlays::draw_menu(frame, inner, menu);
     }
     if let Some(action) = state.confirmation {
         overlays::draw_confirmation(frame, inner, action);
     }
+    if let Some(panel) = state.note {
+        note_panel::draw_note_panel(frame, inner, panel);
+    }
+}
+
+/// 顶部通知条：覆盖 header 区，warning（黄）/ info（蓝），瞬时（下次按键清除）。
+fn draw_notice(frame: &mut Frame, area: Rect, notice: &Notice) {
+    frame.render_widget(Clear, area);
+    let color = if notice.warn { theme::YELLOW } else { theme::BLUE };
+    let text = Paragraph::new(format!(" ⚠ {}", notice.text))
+        .style(Style::default().fg(color).add_modifier(Modifier::BOLD))
+        .block(theme::panel(Some("Notice"), true));
+    frame.render_widget(text, area);
 }
 
 fn draw_too_small(frame: &mut Frame, area: Rect) {

@@ -1,6 +1,6 @@
 //! 笔记视图构建：遍历 `chapter_path` 收集对话/叙事/审判快照。
 
-use crate::engine::outcome::{NoteDialogue, NoteJudgment, NoteNarrative, NoteView};
+use crate::engine::outcome::{NoteDialogue, NoteJudgment, NoteNarrative, NoteVoice, NoteView};
 use crate::engine::state::Session;
 
 impl Session {
@@ -10,6 +10,7 @@ impl Session {
             self.push_dialogue_notes(ch, &mut view);
             self.push_narrative_notes(ch, &mut view);
             self.push_judgment_notes(ch, &mut view);
+            self.push_voice_notes(ch, &mut view);
         }
         view
     }
@@ -85,6 +86,30 @@ impl Session {
                 judgment_id: j.judgment.clone(),
                 target_name,
                 text: self.read_snapshot_or_missing(&j.result_snapshot),
+            });
+        }
+    }
+
+    fn push_voice_notes(&self, ch: &str, view: &mut NoteView) {
+        let Some(list) = self.save.viewed_narrative.get(ch) else {
+            return;
+        };
+        for n in list {
+            let label = self
+                .engine
+                .get_narrative_item(ch, &n.id)
+                .map(|x| x.label.clone())
+                .unwrap_or_else(|| {
+                    if n.id == crate::content::LEAVE_ATTEMPT_TRIGGER {
+                        "走不出去".into()
+                    } else {
+                        "旁白".into()
+                    }
+                });
+            view.voices.push(NoteVoice {
+                chapter: ch.to_string(),
+                label,
+                text: self.read_snapshot_or_missing(&n.snapshot),
             });
         }
     }

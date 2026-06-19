@@ -78,6 +78,8 @@ struct Checker<'a> {
     pub(crate) clue_owner: HashMap<String, String>,
     /// 审判点 id → 定义所在章节（首次出现）。
     pub(crate) judgment_owner: HashMap<String, String>,
+    /// 叙事触发器 id → 定义所在章节（首次出现）。
+    pub(crate) narrative_owner: HashMap<String, String>,
     /// 所有场景作为他人连接/单向连接目标的集合（孤立判定用；单向入边也算可达）。
     pub(crate) referenced_targets: HashSet<String>,
 }
@@ -86,6 +88,7 @@ impl<'a> Checker<'a> {
     fn new(eng: &'a ContentEngine) -> Self {
         let mut clue_owner = HashMap::new();
         let mut judgment_owner = HashMap::new();
+        let mut narrative_owner = HashMap::new();
         for cid in eng.chapter_ids() {
             for clue in eng.get_clues(cid) {
                 clue_owner
@@ -95,6 +98,11 @@ impl<'a> Checker<'a> {
             for j in eng.get_judgments(cid) {
                 judgment_owner
                     .entry(j.id.clone())
+                    .or_insert_with(|| cid.to_string());
+            }
+            for n in eng.get_narrative(cid) {
+                narrative_owner
+                    .entry(n.id.clone())
                     .or_insert_with(|| cid.to_string());
             }
         }
@@ -111,6 +119,7 @@ impl<'a> Checker<'a> {
             issues: Vec::new(),
             clue_owner,
             judgment_owner,
+            narrative_owner,
             referenced_targets,
         }
     }
@@ -170,7 +179,8 @@ impl<'a> Checker<'a> {
     fn validate_condition_id(&mut self, current_chapter: &str, id: &str) {
         let is_clue = self.clue_owner.contains_key(id);
         let is_judg = self.judgment_owner.contains_key(id);
-        if !is_clue && !is_judg {
+        let is_narr = self.narrative_owner.contains_key(id);
+        if !is_clue && !is_judg && !is_narr {
             self.err(format!("章节 {current_chapter} 的条件引用了未知 id：{id}"));
             return;
         }

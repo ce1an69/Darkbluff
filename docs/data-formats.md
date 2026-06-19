@@ -107,6 +107,14 @@ one_way_connections:
 
 **单向死胡同约束**: `one_way_connections` 的目标必须有独立出口（自身声明了 `connections` 或 `one_way_connections`），否则玩家进入后无法离开、构成死锁——启动校验会以 error 拦截（见 [content-engine.md](content-engine.md)）。
 
+**走不出去（`exit_attempt`，可选）**: 承载「猫无法离开锈镇」的世界规则。仅边缘场景（如镇边荒地）声明此字段——`move` 无参数菜单在该场景额外追加一项「试着离开镇子」（伪出口 `__leave`），玩家选中后**不移动**：首次展示 `exit_attempt.text`（写入快照、记入 `discovered.triggers` 的固定 id `leave_attempt`），之后每次仅简短提示「脚步把你带回原处」。文本为相对 `data/` 根的 Markdown 路径：
+
+```yaml
+# scenes/outskirts.yaml
+exit_attempt:
+  text: text/scenes/outskirts.leave.md
+```
+
 `move` 时校验目标在当前场景的可达连接中（含引擎补全的反向连接，见 [commands.md](commands.md) 运行时错误表）。引擎启动校验 `connections` 和 `one_way_connections` 引用的场景 ID 有效（见 [content-engine.md](content-engine.md)）。
 
 ## 角色定义
@@ -160,6 +168,11 @@ characters:
         label: "关于受害者"
         available: true
 required_judgments: [judge_wolf, judge_crow]   # 自动推进前必须完成的审判 id；缺省=本章全部审判
+narrative:                            # 可选：叙事触发器（心声 / 记忆碎片），见下文「叙事触发器」
+  - id: voice_market
+    label: 心声
+    when: judge_crow                  # 可选：满足条件时触发；省略=进入本章即触发
+    text: voice_market.md
 next:
   default: tavern_uncertain
   branches:
@@ -203,6 +216,7 @@ required_judgments: [judge_wolf]    # 终章也必须通过必要审判结束
 - `characters[].appears_in` — 该角色本章出现的场景 `id` 列表；省略时默认出现在本章所有场景。`ask` 校验目标角色必须在当前场景（否则提示「这里没有这个角色。」）；`judge` 是章级操作，不校验 `appears_in`，只要求角色在本章 `characters` 中声明即可
 - 话题可见性 — `available: true` 表示默认可问；`available: false` 配合 `unlock_after` 表示满足条件后解锁；`available: false` 且**无** `unlock_after` 表示该话题本章**永久不可问**（合法用法，用于剧情上有意封禁的话题）
 - `required_judgments` — 自动推进前必须完成的审判（审判点 id）。省略时默认要求本章所有审判都已完成；显式空数组 `[]` 不合法。v1 不支持无审判推进章节，因此每章必须至少有一个审判点，且必要审判集合不能为空
+- `narrative` — 可选的叙事触发器列表（心声 / 记忆碎片 / 旁白），承载主角脑中声音、记忆残影等**非对话叙事**。每项 `{ id, label, when?, text }`：`id` 全局唯一、发布冻结，同时作为条件标记进入 FactSet（可被话题 `unlock_after` / 跳转 `when` 引用）；`when` 为扁平条件表达式，省略则进入本章即触发；`label` 用于展示与 note 归类（如「心声」「记忆碎片」）；`text` 为相对章节目录的 Markdown 路径。详见下文「叙事触发器」与 [narrative/rules.md](narrative/rules.md)
 - `intro` — 可选的章节开场/过场叙事文本（Markdown 文件相对路径，如 `intro.md`）。进入本章时（新游戏首章 / 自动推进跳转 / `map` 回滚）先展示开场，玩家确认后再进入 `starting_scene`；省略则直接进入场景。展示时引擎写入开场快照供 `note`「叙事」标签页回顾（见 [save-system.md](save-system.md)）
 - `outro` — 可选的终章结局收尾叙事文本（Markdown 文件相对路径，如 `outro.md`），**仅对 `ending: true` 的终章有效**。终章完成最后一个必要审判后先展示 outro，玩家确认后进入结局界面（`Ending` 状态）；省略则直接进入结局界面。展示时写入快照供 `note`「叙事」标签页回顾。非终章定义 `outro` 为启动校验错误
 - `ending` — `true` 表示终章；终章没有 `next`，完成最后一个必要审判时记为达成结局
@@ -229,6 +243,34 @@ required_judgments: [judge_wolf]    # 终章也必须通过必要审判结束
 4. 进入新章节：若有 `intro` 先展示开场并写入快照（记入 `viewed_intros`），玩家确认后进入 `starting_scene`，**此时**创建 `chapter_start` 检查点（默认 `surface` 视角）。新游戏首章同理。`map` 回到 `chapter_start` 时重新展示 `intro`（若有），但快照按首次查看规则去重；开场快照可在 note「叙事」回顾（见 [save-system.md](save-system.md)）
 
 **终章的两阶段生命周期**：通过前一章自动推进**进入**终章时执行 step 2-4（此时只记 `discovered.chapters`，不记 `discovered.endings`）。终章和普通章节一样可以包含场景探索与审判。玩家在终章内完成最后一个必要审判时才记入 `discovered.endings`、展示 `outro`（若有）并进入结局界面——即终章不是进入时自动结束。
+
+## 叙事触发器
+
+叙事触发器（`chapter.yaml` 的 `narrative` 字段）承载**非对话叙事**：主角脑中的声音（心声）、闪回的记忆残影（碎片），以及过场旁白。它们不是 NPC 台词，而是猫的主观层——区分于对话，在展示与 `note` 中独立归类。
+
+每项结构：
+
+```yaml
+narrative:
+  - id: voice_market              # 全局唯一、发布冻结；同时作为条件标记进入 FactSet
+    label: 心声                   # 展示与 note 归类前缀（心声 / 记忆碎片 / 旁白）
+    when: judge_crow              # 可选：扁平条件表达式；省略=进入本章即触发
+    text: voice_market.md         # 相对章节目录的 Markdown 路径
+```
+
+**触发机制**:
+
+- 引擎在进入章节（开场展示完毕后）、`ask` / `judge` / `gaze` / `move` 之后，用当前 FactSet 求值本章各触发器的 `when`
+- 首个 `when` 命中且尚未触发的触发器被消费：文本写入快照、id 记入 `discovered.triggers`（去重，任何回滚不丢失）与 `viewed_narrative`（note 可回顾），产出 `Outcome::Narrative` 进入 `ShowingNarrative` 状态
+- 玩家确认后继续 drain 下一个；成串的心声依次展示，序列结束后回到原流程（对话 / 消息 / 场景描述），或执行被推迟的章节推进
+- **审判后碎片**：若触发器 `when` 引用的审判点属 `required_judgments`，审判完成时碎片在章节推进**之前**触发（drain 完毕再推进），确保「审判后碎片」不被章节切换吞没
+
+**作为条件标记**:
+
+- 触发器 `id` 进入 FactSet（与线索 id、审判点 id 同命名空间，全局唯一）
+- 可被话题 `unlock_after`、章节跳转 `when` 引用——例如「看过碎片 A 后解锁话题 B」：`unlock_after: fragment_a`
+
+**启动校验**（见 [content-engine.md](content-engine.md)）: `id` 非空且全局唯一、`label` 非空（warning）、`when` 条件 id 有效、`text` 文件存在。创作约束详见 [narrative/rules.md](narrative/rules.md)。
 
 ## 对话数据
 

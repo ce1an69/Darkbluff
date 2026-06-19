@@ -86,21 +86,33 @@ impl Session {
         let map_hint = self.hint_after_judge();
 
         if complete {
-            let outcome = self.advance_after_judgment(Some(result_text));
-            match (map_hint, outcome) {
-                (Some(hint), Outcome::Message(mut message)) => {
-                    message.lines.push(hint);
-                    Outcome::Message(message)
-                }
-                (_, o) => o,
-            }
+            self.drain_or_advance(Some(result_text), map_hint)
         } else {
             self.state = SessionState::Exploring;
             let mut msgs = vec![result_text, "[本章必要审判尚未全部完成，继续探索]".into()];
             if let Some(hint) = map_hint {
                 msgs.push(hint);
             }
-            Outcome::Message(Message::info(msgs))
+            self.then_narrative(Outcome::Message(Message::info(msgs)))
+        }
+    }
+
+    /// 推进章节并把 `map_hint` 拼到产出的 Message（若有）。
+    pub(crate) fn advance_with_hint(
+        &mut self,
+        prelude: Option<String>,
+        map_hint: Option<String>,
+    ) -> Outcome {
+        let outcome = self.advance_after_judgment(prelude);
+        match map_hint {
+            Some(hint) => match outcome {
+                Outcome::Message(mut message) => {
+                    message.lines.push(hint);
+                    Outcome::Message(message)
+                }
+                other => other,
+            },
+            None => outcome,
         }
     }
 

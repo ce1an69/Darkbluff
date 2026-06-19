@@ -34,6 +34,9 @@ pub struct Save {
     pub viewed_intros: HashMap<String, String>,
     /// 已展示的终章结局文本快照路径（chapter → 相对路径）。
     pub viewed_outros: HashMap<String, String>,
+    /// 已展示的叙事触发器（心声 / 记忆碎片）快照索引（按章节分组，展示记录；
+    /// 不进检查点长度截断，跨章回滚随章节清理，与 viewed_intros 同构）。
+    pub viewed_narrative: HashMap<String, Vec<NarrativeSeen>>,
     /// 当前流程经过的章节路径。
     pub chapter_path: Vec<String>,
     /// 自动创建的检查点（全局追加列表）。
@@ -55,6 +58,7 @@ impl Default for Save {
             judgments_made: HashMap::new(),
             viewed_intros: HashMap::new(),
             viewed_outros: HashMap::new(),
+            viewed_narrative: HashMap::new(),
             chapter_path: Vec::new(),
             checkpoints: Vec::new(),
             discovered: Discovered::default(),
@@ -124,6 +128,15 @@ pub struct JudgmentMade {
     pub result_snapshot: String,
 }
 
+/// 已展示的叙事触发器（心声 / 记忆碎片）记录。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NarrativeSeen {
+    /// 触发器 id（同时进 `discovered.triggers`，发布冻结）。
+    pub id: String,
+    /// 快照相对路径（基准为存档根目录 `save/`）。
+    pub snapshot: String,
+}
+
 /// 检查点种类。
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -180,6 +193,9 @@ pub struct Discovered {
     /// 曾问过的话题（chapter → `{character}.{topic}` 列表，去重）。
     #[serde(default)]
     pub topics: HashMap<String, Vec<String>>,
+    /// 曾触发的叙事触发器 id（心声 / 碎片 / 走不出去），去重；任何回滚都不截断。
+    #[serde(default)]
+    pub triggers: Vec<String>,
 }
 
 impl Discovered {
@@ -195,6 +211,14 @@ impl Discovered {
     pub fn add_topic(&mut self, chapter: &str, character: &str, topic: &str) {
         let entry = format!("{character}.{topic}");
         Self::push_dedup(self.topics.entry(chapter.to_string()).or_default(), &entry);
+    }
+    /// 追加已触发的叙事触发器 id（去重）。
+    pub fn add_trigger(&mut self, id: &str) {
+        Self::push_dedup(&mut self.triggers, id);
+    }
+    /// 某叙事触发器是否已触发过。
+    pub fn triggered(&self, id: &str) -> bool {
+        self.triggers.iter().any(|t| t == id)
     }
 
     fn push_dedup(vec: &mut Vec<String>, item: &str) {

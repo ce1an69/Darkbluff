@@ -15,8 +15,10 @@
    - 每个章节必须至少定义一个审判点；v1 不支持无审判推进章节
    - `required_judgments` 引用的审判点 id 在本章 `judgments.yaml` 中定义，且显式配置时不能为空；省略时默认本章全部审判
    - 线索 `source` 引用的角色和话题有效，且 `world` 与该对话实际存在的世界版本一致（单世界话题的线索 `world` 必须匹配）
-   - 所有外键类 id（chapter / scene / character / clue / judgment）**全局唯一**且非空
-   - 条件表达式引用的线索和审判点 id 有效，且结构扁平（无嵌套）
+   - 所有外键类 id（chapter / scene / character / clue / judgment / narrative）**全局唯一**且非空
+   - 条件表达式引用的线索、审判点和叙事触发器 id 有效，且结构扁平（无嵌套）
+   - **叙事触发器（`narrative`）**: `label` 非空（缺失为 warning）、`when` 条件 id 有效、`text` 文件存在；`id` 进全局唯一性校验。详见 [data-formats.md](data-formats.md)「叙事触发器」
+   - **走不出去（`exit_attempt`）**: 声明了 `exit_attempt` 的场景，其 `text` 文件必须存在
    - 条件表达式引用的线索 id，若定义在与当前章节不同的章节中，输出 **advisory warning**"线索 `{id}` 定义在章节 `{source_chapter}` 中，被章节 `{current_chapter}` 的 `unlock_after` 引用，请确认前者是后者的前置章节"（非阻断错误，仅提示内容作者复查）
    - 章节图为**有向无环图**（`next` 指针不得构成环）
    - 非终章（`ending` 为 `false` 或缺省）**必须提供 `next` 字段**（至少含 `default`）；终章**不得提供 `next` 字段**
@@ -63,7 +65,7 @@ enum Condition {
 
 解析规则：YAML 中裸字符串（如 `wolf_alibi`）→ `Fact`；`{all_of: [...]}` → `AllOf`；`{any_of: [...]}` → `AnyOf`；`{not: id}` → `Not`。结构必须扁平（启动校验保证无嵌套）。
 
-**FactSet 构造** ——从存档合并 `chapter_path` 中所有章节（首章到当前章，含当前章）的事实：
+**FactSet 构造** ——从存档合并 `chapter_path` 中所有章节（首章到当前章，含当前章）的线索与审判，再并入 append-only 的叙事触发器记忆：
 
 ```rust
 fn build_factset(save) -> HashSet<String> {
@@ -76,11 +78,16 @@ fn build_factset(save) -> HashSet<String> {
             for j in judgs { facts.insert(j.judgment.clone()); }
         }
     }
+    // 叙事触发器 id（心声 / 碎片 / 走不出去）：取自 append-only 的 discovered.triggers，
+    // 而非随章清理的 viewed_narrative——保证「碎片作为事实」与「不重复触发」语义一致。
+    for t in &save.discovered.triggers {
+        facts.insert(t.clone());
+    }
     facts
 }
 ```
 
-范围说明：`judge` 后自动推进章节时，当前章的审判已完成并纳入（`chapter_path` 含当前章），因此跳转条件能反映本章选择；话题解锁用同一 FactSet。
+范围说明：`judge` 后自动推进章节时，当前章的审判已完成并纳入（`chapter_path` 含当前章），因此跳转条件能反映本章选择；话题解锁用同一 FactSet。叙事触发器 id 一旦触发即作为永久事实（与 `discovered` 的 append-only 语义一致），回滚不会移除——这保证 `when` 链式依赖（如 T2 `when: [T1]`）不会因 T1 的快照随章清理而失效。
 
 **求值**：
 
@@ -157,6 +164,12 @@ impl ContentEngine {
 
     /// 线索查询
     fn get_clues(chapter_id: &str) -> &[Clue];
+
+    /// 叙事触发器查询（心声 / 碎片；可见性由引擎层用 FactSet 求值）
+    fn get_narrative(chapter_id: &str) -> &[Narrative];
+    fn get_narrative_text(chapter_id: &str, trigger_id: &str) -> Option<&str>;
+    /// 场景「走不出去」失败文本（仅边缘场景声明 `exit_attempt`）
+    fn scene_exit_attempt_text(scene_id: &str) -> Option<&str>;
 
     /// 场景可达连接（含引擎自动补全的反向连接和 one_way_connections）
     fn get_reachable_scenes(scene_id: &str) -> Vec<&str>;

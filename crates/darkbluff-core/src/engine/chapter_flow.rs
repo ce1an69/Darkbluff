@@ -3,6 +3,7 @@
 //! 设计见 docs/data-formats.md「自动推进章节」、docs/narrative.md「终章结构」。
 //! 这些是 [`crate::engine::state::Session`] 的方法，按职责拆到此文件。
 
+use crate::engine::condition::{build_factset, chapter_complete};
 use crate::engine::outcome::{Message, Outcome, SessionState};
 use crate::engine::state::Session;
 use crate::save::checkpoint;
@@ -19,6 +20,14 @@ impl Session {
         for w in &warnings {
             tracing::warn!("存档回退: {w}");
         }
+
+        // 崩溃恢复：drain_or_advance 把「审判完成后的推进」挂到非持久化的 pending；若上次在
+        // 「审判完成 + 心声展示中」退出，存档里审判已完成但章节未切换。检测到当前章必要审判
+        // 已完成却仍停在 Exploring，补回被中断的推进，避免软锁（无指令可恢复）。
+        if self.advance_was_interrupted() {
+            return self.advance_after_judgment(None);
+        }
+
         self.state = SessionState::Exploring;
         let has_warnings = !warnings.is_empty();
         let mut msgs = warnings;
@@ -29,6 +38,22 @@ impl Session {
             Message::info(msgs)
         };
         Outcome::Message(message)
+    }
+
+    /// 当前章必要审判是否已完成（供 continue_with 检测被中断的自动推进）。
+    fn advance_was_interrupted(&self) -> bool {
+        let ch = &self.save.current_chapter;
+        let Some(chapter) = self.engine.get_chapter(ch) else {
+            return false;
+        };
+        let facts = build_factset(&self.save);
+        let all_jids: Vec<String> = self
+            .engine
+            .get_judgments(ch)
+            .iter()
+            .map(|j| j.id.clone())
+            .collect();
+        chapter_complete(chapter, &facts, &all_jids)
     }
 
     /// 开始新游戏：初始化首章。
@@ -118,7 +143,8 @@ impl Session {
         }
         self.state = SessionState::Exploring;
         self.persist();
-        Outcome::Message(Message::info(self.scene_description_messages()))
+        let base = Outcome::Message(Message::info(self.scene_description_messages()));
+        self.then_narrative(base)
     }
 
     pub(crate) fn to_ending(&mut self) -> Outcome {

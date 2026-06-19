@@ -116,6 +116,7 @@ pub fn map_checkpoint_rollback(save: &mut Save, checkpoint_id: &str) -> Result<(
             save.judgments_made.remove(ch);
             save.viewed_intros.remove(ch);
             save.viewed_outros.remove(ch);
+            save.viewed_narrative.remove(ch);
         }
     }
 

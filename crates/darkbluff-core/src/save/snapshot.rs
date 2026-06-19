@@ -111,6 +111,11 @@ fn referenced_snapshot_paths(save: &Save) -> HashSet<String> {
             set.insert(j.result_snapshot.clone());
         }
     }
+    for list in save.viewed_narrative.values() {
+        for n in list {
+            set.insert(n.snapshot.clone());
+        }
+    }
     set
 }
 
@@ -130,6 +135,10 @@ pub fn outro_snapshot_path(chapter: &str) -> String {
 
 pub fn judgment_snapshot_path(chapter: &str, judgment_id: &str) -> String {
     format!("snapshots/{chapter}/{judgment_id}.md")
+}
+
+pub fn narrative_snapshot_path(chapter: &str, trigger_id: &str) -> String {
+    format!("snapshots/{chapter}/narrative.{trigger_id}.md")
 }
 
 #[cfg(test)]

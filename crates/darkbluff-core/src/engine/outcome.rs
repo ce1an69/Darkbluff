@@ -98,12 +98,21 @@ pub struct NoteJudgment {
     pub text: String,
 }
 
+/// 笔记中的心声 / 碎片条目。
+#[derive(Debug, Clone)]
+pub struct NoteVoice {
+    pub chapter: String,
+    pub label: String,
+    pub text: String,
+}
+
 /// 笔记视图（当前 `chapter_path` 范围）。
 #[derive(Debug, Clone, Default)]
 pub struct NoteView {
     pub dialogues: Vec<NoteDialogue>,
     pub narratives: Vec<NoteNarrative>,
     pub judgments: Vec<NoteJudgment>,
+    pub voices: Vec<NoteVoice>,
 }
 
 /// 引擎产出。渲染层（TUI/GUI）据此自行决定展示方式；测试据此断言。
@@ -132,6 +141,8 @@ pub enum Outcome {
     ChapterIntro { text: String },
     /// 终章结局文本（等待 Ack）。
     ChapterOutro { text: String },
+    /// 叙事触发器文本（心声 / 记忆碎片 / 旁白，等待 Ack）。
+    Narrative { label: String, text: String },
     /// 笔记视图。
     Notes(NoteView),
     /// 结局界面。
@@ -183,6 +194,7 @@ pub enum SessionState {
     ChoosingMove,
     ChoosingCheckpoint,
     Confirming,
+    ShowingNarrative,
     ShowingOutro,
     Ending,
 }

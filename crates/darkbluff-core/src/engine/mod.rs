@@ -17,6 +17,7 @@ mod note_view;
 mod outcome;
 mod state;
 mod system;
+mod trigger;
 
 pub use outcome::{
     ConfirmationAction, Input, MenuKind, MenuOption, Message, MessageLevel, NoteView, Outcome,
