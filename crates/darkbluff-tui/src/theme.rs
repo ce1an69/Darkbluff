@@ -29,6 +29,9 @@ pub const YELLOW: Color = Color::Rgb(249, 226, 175); // #f9e2af
 pub const SKY: Color = Color::Rgb(137, 220, 235); // #89dceb
 pub const BLUE: Color = Color::Rgb(137, 180, 250); // #89b4fa
 
+/// 暗紫：非聚焦面板的边框色（整体偏紫，但弱于聚焦态的 MAUVE）。
+pub const BORDER: Color = Color::Rgb(130, 100, 180); // #8264b4
+
 /// 视角主色：Surface=天蓝，Shadow=紫。
 pub fn world_color(world: World) -> Color {
     match world {
@@ -47,7 +50,7 @@ pub fn world_label(world: World) -> &'static str {
 
 /// 圆角主题面板。`focus=true` 时边框提亮为主色（用于输入框等聚焦元素）。
 pub fn panel<'a>(title: Option<&str>, focus: bool) -> Block<'a> {
-    let border = if focus { MAUVE } else { OVERLAY0 };
+    let border = if focus { MAUVE } else { BORDER };
     let mut block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border))
