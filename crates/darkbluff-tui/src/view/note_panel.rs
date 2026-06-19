@@ -3,11 +3,11 @@
 //! `note` 指令打开此面板（会话仍处 `Exploring`）；1-4 切标签、Esc 关闭。
 
 use darkbluff_core::engine::NoteView;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
-use ratatui::Frame;
 
 use crate::app::{NotePanel, NoteTab};
 use crate::markdown;

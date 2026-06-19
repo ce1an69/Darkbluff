@@ -4,12 +4,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use darkbluff_core::content::{ContentEngine, InMemorySource};
 use darkbluff_core::engine::{Input, Outcome, Selection, Session, SessionState};
-use darkbluff_core::save::{CheckpointKind, FakeClock, SaveStore};
+use darkbluff_core::save::{CheckpointKind, FakeClock, Motion, SaveStore};
 use darkbluff_core::world::World;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn build_session() -> Session {
+fn fresh_dir(tag: &str) -> std::path::PathBuf {
+    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+    std::env::temp_dir().join(format!("darkbluff-{tag}-{}-{n}", std::process::id()))
+}
+
+fn build_session_in(dir: std::path::PathBuf) -> Session {
     let src = InMemorySource::new()
         .insert("scenes/tavern.yaml", "id: tavern\nname: 酒馆\nconnections: [market]\ndescription:\n  surface: ts.surface.md\n  shadow: ts.shadow.md\n")
         .insert("scenes/market.yaml", "id: market\nname: 集市\ndescription:\n  surface: ms.surface.md\n  shadow: ms.shadow.md\n")
@@ -31,10 +36,35 @@ fn build_session() -> Session {
         .insert("chapters/c_other/judgments.yaml", "- id: judge_wolf_other\n  target: wolf\n  result: r.md\n")
         .insert("chapters/c_other/r.md", "其他审判。");
     let engine = ContentEngine::load(&src).unwrap();
-    let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("darkbluff-session-{}-{n}", std::process::id()));
     let store = SaveStore::open(dir, Box::new(FakeClock::new())).unwrap();
     Session::new(engine, store)
+}
+
+fn build_session() -> Session {
+    build_session_in(fresh_dir("session"))
+}
+
+/// 把目录改为只读以构造「存档写入失败」场景；若运行身份仍可写（如 root）则返回
+/// false，调用方据此跳过依赖失败条件的断言。结束后调用方负责恢复权限并清理。
+#[cfg(unix)]
+fn lock_dir_readonly(dir: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    if std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o500)).is_err() {
+        return false;
+    }
+    let probe = dir.join(".darkbluff_probe");
+    if std::fs::write(&probe, b"x").is_ok() {
+        let _ = std::fs::remove_file(&probe);
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        return false;
+    }
+    true
+}
+
+#[cfg(unix)]
+fn unlock_dir(dir: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
 }
 
 #[test]
@@ -50,11 +80,37 @@ fn new_game_shows_intro_then_exploring() {
         o => panic!("expected show, got {:?}", o),
     }
     assert_eq!(*s.state(), SessionState::Exploring);
-    assert!(s
-        .save()
-        .checkpoints
-        .iter()
-        .any(|c| c.kind == CheckpointKind::ChapterStart));
+    assert!(
+        s.save()
+            .checkpoints
+            .iter()
+            .any(|c| c.kind == CheckpointKind::ChapterStart)
+    );
+}
+
+#[test]
+fn title_settings_persist_motion_and_return_to_title() {
+    let mut s = build_session();
+    s.handle(Input::Cancel); // enter title
+    match s.handle(Input::Select(Selection::Id("settings".into()))) {
+        Outcome::MenuRequested { kind, options, .. } => {
+            assert_eq!(kind, darkbluff_core::engine::MenuKind::Settings);
+            assert!(options.iter().any(|o| o.id == "motion_off"));
+        }
+        o => panic!("expected settings menu, got {:?}", o),
+    }
+    assert_eq!(*s.state(), SessionState::ChoosingSettings);
+    match s.handle(Input::Select(Selection::Id("motion_off".into()))) {
+        Outcome::MenuRequested { options, .. } => {
+            // label 不再承载选中标记；仅确认菜单已重建且仍含 motion_off 项。
+            assert!(options.iter().any(|o| o.id == "motion_off"));
+            assert!(options.iter().all(|o| !o.label.contains('✓')));
+        }
+        o => panic!("expected refreshed settings menu, got {:?}", o),
+    }
+    assert_eq!(s.settings().motion, Motion::Off);
+    s.handle(Input::Cancel);
+    assert_eq!(*s.state(), SessionState::Title);
 }
 
 #[test]
@@ -71,13 +127,14 @@ fn ask_direct_collects_clue_and_records_snapshot() {
     }
     assert!(s.save().has_clue("c1", "wolf_alibi"));
     assert_eq!(s.save().viewed_dialogues.get("c1").unwrap().len(), 1);
-    assert!(s
-        .save()
-        .discovered
-        .topics
-        .get("c1")
-        .unwrap()
-        .contains(&"wolf.whereabouts".to_string()));
+    assert!(
+        s.save()
+            .discovered
+            .topics
+            .get("c1")
+            .unwrap()
+            .contains(&"wolf.whereabouts".to_string())
+    );
 }
 
 #[test]
@@ -141,11 +198,12 @@ fn judge_creates_checkpoint_and_advances() {
     s.handle(Input::Ack);
     s.handle(Input::Text("judge wolf".into()));
     assert_eq!(s.save().current_chapter, "c_truth");
-    assert!(s
-        .save()
-        .checkpoints
-        .iter()
-        .any(|c| c.kind == CheckpointKind::BeforeJudgment));
+    assert!(
+        s.save()
+            .checkpoints
+            .iter()
+            .any(|c| c.kind == CheckpointKind::BeforeJudgment)
+    );
 }
 
 #[test]
@@ -254,6 +312,64 @@ fn force_quit_from_menu_state() {
 }
 
 #[test]
+fn force_quit_from_choosing_settings() {
+    // ForceQuit 是独立变体，须在任意状态（含设置菜单）命中 do_quit(true) 并退出。
+    let mut s = build_session();
+    s.handle(Input::Cancel); // 进入标题
+    s.handle(Input::Select(Selection::Id("settings".into())));
+    assert_eq!(*s.state(), SessionState::ChoosingSettings);
+    match s.handle(Input::ForceQuit) {
+        Outcome::QuitRequested => {}
+        o => panic!("expected QuitRequested from ChoosingSettings via ForceQuit, got {o:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn force_quit_overrides_persist_failure() {
+    // 存档写入失败时：Quit（Ctrl+C）留在游戏内，ForceQuit（SIGTERM）仍退出。
+    let dir = fresh_dir("forcequit-fail");
+    let mut s = build_session_in(dir.clone());
+    s.start_new_game();
+    s.handle(Input::Ack);
+    if !lock_dir_readonly(&dir) {
+        return; // 无法只读化（如 root）则跳过
+    }
+    match s.handle(Input::Quit) {
+        Outcome::Message(_) => {}
+        o => panic!("graceful quit should stay in-game on persist failure, got {o:?}"),
+    }
+    match s.handle(Input::ForceQuit) {
+        Outcome::QuitRequested => {}
+        o => panic!("force quit should still exit on persist failure, got {o:?}"),
+    }
+    unlock_dir(&dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn select_setting_rolls_back_on_save_failure() {
+    // save_settings 失败时：内存 motion 不变（先落盘后改内存），仍留在设置菜单。
+    let dir = fresh_dir("setting-fail");
+    let mut s = build_session_in(dir.clone());
+    s.handle(Input::Cancel); // 进入标题
+    s.handle(Input::Select(Selection::Id("settings".into())));
+    assert_eq!(s.settings().motion, Motion::Full);
+    if !lock_dir_readonly(&dir) {
+        return;
+    }
+    match s.handle(Input::Select(Selection::Id("motion_off".into()))) {
+        Outcome::Message(_) => {}
+        o => panic!("expected error message on settings save failure, got {o:?}"),
+    }
+    assert_eq!(s.settings().motion, Motion::Full);
+    assert_eq!(*s.state(), SessionState::ChoosingSettings);
+    unlock_dir(&dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn hint_gaze_after_three_surface_asks() {
     let mut s = build_session();
     s.start_new_game();
@@ -335,6 +451,7 @@ fn title_shows_menu_no_save() {
             // 无存档时没有"继续"
             assert!(!options.iter().any(|o| o.id == "continue"));
             assert!(options.iter().any(|o| o.id == "new_game"));
+            assert!(options.iter().any(|o| o.id == "settings"));
             assert!(options.iter().any(|o| o.id == "quit"));
         }
         o => panic!("expected menu, got {:?}", o),
@@ -366,8 +483,8 @@ fn menu_selection_can_use_option_id() {
 #[test]
 fn title_quit_exits() {
     let mut s = build_session();
-    s.handle(Input::Text("".into())); // 触发 Title 菜单 [new_game, quit]
-    match s.handle(Input::Select(Selection::Index(1))) {
+    s.handle(Input::Text("".into())); // 触发 Title 菜单
+    match s.handle(Input::Select(Selection::Id("quit".into()))) {
         Outcome::QuitRequested => {}
         o => panic!("expected quit, got {:?}", o),
     }

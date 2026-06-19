@@ -77,7 +77,11 @@ mod tests {
     #[test]
     fn required_judgments_complete_explicit() {
         let req = vec!["j1".to_string(), "j2".to_string()];
-        assert!(!required_judgments_complete(Some(&req), &facts(&["j1"]), &[]));
+        assert!(!required_judgments_complete(
+            Some(&req),
+            &facts(&["j1"]),
+            &[]
+        ));
         assert!(required_judgments_complete(
             Some(&req),
             &facts(&["j1", "j2", "extra"]),
@@ -89,7 +93,11 @@ mod tests {
     fn required_judgments_complete_implicit_all() {
         let all = vec!["j1".to_string(), "j2".to_string()];
         assert!(!required_judgments_complete(None, &facts(&["j1"]), &all));
-        assert!(required_judgments_complete(None, &facts(&["j1", "j2"]), &all));
+        assert!(required_judgments_complete(
+            None,
+            &facts(&["j1", "j2"]),
+            &all
+        ));
     }
 
     #[test]

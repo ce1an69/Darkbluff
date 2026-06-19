@@ -18,7 +18,7 @@ impl Session {
                 let chars = self.engine.get_characters_in_scene(&ch, &scene);
                 if chars.is_empty() {
                     return Outcome::Message(Message::info(vec![
-                        "这里没有任何可以询问的角色。".into()
+                        "这里没有任何可以询问的角色。".into(),
                     ]));
                 }
                 let options: Vec<MenuOption> = chars

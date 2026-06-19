@@ -51,7 +51,10 @@ mod tests {
 
     #[test]
     fn world_serializes_lowercase() {
-        assert_eq!(serde_json::to_string(&World::Surface).unwrap(), "\"surface\"");
+        assert_eq!(
+            serde_json::to_string(&World::Surface).unwrap(),
+            "\"surface\""
+        );
         assert_eq!(serde_json::to_string(&World::Shadow).unwrap(), "\"shadow\"");
         assert_eq!(
             serde_json::from_str::<World>("\"surface\"").unwrap(),

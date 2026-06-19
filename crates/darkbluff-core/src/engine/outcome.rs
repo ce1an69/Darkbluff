@@ -16,6 +16,7 @@ pub struct MenuOption {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuKind {
     Title,
+    Settings,
     AskCharacter,
     AskTopic,
     JudgeCharacter,
@@ -177,15 +178,19 @@ pub enum Input {
     Confirm(bool),
     /// 继续确认（intro/outro/ending，按任意键）。
     Ack,
-    /// 强制退出：任意状态都走标准退出路径（持久化 + [`Outcome::QuitRequested`]），
+    /// 退出：任意状态都走标准退出路径（持久化失败则留在游戏内提示），
     /// 供渲染层的退出快捷键（如 Ctrl+C）使用，避免绕过引擎直接结束。
     Quit,
+    /// 强制退出：best-effort 持久化后无条件 [`Outcome::QuitRequested`]，
+    /// 供 SIGTERM 等不可忽略的信号使用，保证进程始终可被终止（即使磁盘满存档失败）。
+    ForceQuit,
 }
 
 /// 会话状态（与 architecture.md「状态机」对应；渲染层可据此选择可接受输入）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionState {
     Title,
+    ChoosingSettings,
     ShowingIntro,
     Exploring,
     ChoosingAskCharacter,

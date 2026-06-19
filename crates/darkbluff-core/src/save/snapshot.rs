@@ -122,7 +122,10 @@ fn referenced_snapshot_paths(save: &Save) -> HashSet<String> {
 // ----- 路径约定 -----
 
 pub fn dialogue_snapshot_path(chapter: &str, character: &str, topic: &str, world: World) -> String {
-    format!("snapshots/{chapter}/{character}.{topic}.{}.md", world.as_str())
+    format!(
+        "snapshots/{chapter}/{character}.{topic}.{}.md",
+        world.as_str()
+    )
 }
 
 pub fn intro_snapshot_path(chapter: &str) -> String {
@@ -217,6 +220,9 @@ mod tests {
             "snapshots/c1/wolf.whereabouts.shadow.md"
         );
         assert_eq!(intro_snapshot_path("c1"), "snapshots/c1/intro.md");
-        assert_eq!(judgment_snapshot_path("c1", "judge_wolf"), "snapshots/c1/judge_wolf.md");
+        assert_eq!(
+            judgment_snapshot_path("c1", "judge_wolf"),
+            "snapshots/c1/judge_wolf.md"
+        );
     }
 }

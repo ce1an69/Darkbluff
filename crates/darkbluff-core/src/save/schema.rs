@@ -89,7 +89,9 @@ impl Save {
     }
     /// 取某章已查看对话的可变引用。
     pub fn views_mut(&mut self, chapter: &str) -> &mut Vec<ViewedDialogue> {
-        self.viewed_dialogues.entry(chapter.to_string()).or_default()
+        self.viewed_dialogues
+            .entry(chapter.to_string())
+            .or_default()
     }
     /// 取某章已审判记录的可变引用。
     pub fn judgments_mut(&mut self, chapter: &str) -> &mut Vec<JudgmentMade> {
@@ -275,6 +277,45 @@ pub enum Motion {
     Off,
 }
 
+impl Motion {
+    /// 设置菜单 option id（唯一来源，供引擎构建菜单与渲染层回查）。
+    pub fn menu_id(self) -> &'static str {
+        match self {
+            Motion::Full => "motion_full",
+            Motion::Reduced => "motion_reduced",
+            Motion::Off => "motion_off",
+        }
+    }
+
+    /// 由设置菜单 option id 反查 Motion。
+    pub fn from_menu_id(id: &str) -> Option<Motion> {
+        match id {
+            "motion_full" => Some(Motion::Full),
+            "motion_reduced" => Some(Motion::Reduced),
+            "motion_off" => Some(Motion::Off),
+            _ => None,
+        }
+    }
+
+    /// 中文标签（数据语言；随存档/设置面向玩家）。
+    pub fn zh_label(self) -> &'static str {
+        match self {
+            Motion::Full => "动画：完整",
+            Motion::Reduced => "动画：减少",
+            Motion::Off => "动画：关闭",
+        }
+    }
+
+    /// 英文标签（界面 chrome 语言）。
+    pub fn en_label(self) -> &'static str {
+        match self {
+            Motion::Full => "Motion: Full",
+            Motion::Reduced => "Motion: Reduced",
+            Motion::Off => "Motion: Off",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,7 +378,8 @@ mod tests {
     #[test]
     fn checkpoint_state_of() {
         let mut save = Save::new_game("c1", "s", "t".into());
-        save.clues_mut("c1").extend(["a", "b"].iter().map(|s| s.to_string()));
+        save.clues_mut("c1")
+            .extend(["a", "b"].iter().map(|s| s.to_string()));
         save.views_mut("c1").push(ViewedDialogue {
             character: "w".into(),
             topic: "t".into(),
@@ -384,5 +426,19 @@ mod tests {
         assert!(json.contains("\"full\""));
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(back, s);
+    }
+
+    #[test]
+    fn motion_menu_id_roundtrip() {
+        for motion in [Motion::Full, Motion::Reduced, Motion::Off] {
+            assert_eq!(Motion::from_menu_id(motion.menu_id()), Some(motion));
+        }
+        // menu_id ↔ zh_label ↔ en_label 三者一一对应、互不串味。
+        assert_eq!(Motion::Full.menu_id(), "motion_full");
+        assert_eq!(Motion::Reduced.menu_id(), "motion_reduced");
+        assert_eq!(Motion::Off.menu_id(), "motion_off");
+        assert_eq!(Motion::Full.en_label(), "Motion: Full");
+        assert_eq!(Motion::Off.zh_label(), "动画：关闭");
+        assert_eq!(Motion::from_menu_id("bogus"), None);
     }
 }

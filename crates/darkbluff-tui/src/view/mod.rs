@@ -20,12 +20,12 @@ use std::collections::VecDeque;
 
 use darkbluff_core::engine::{ConfirmationAction, MenuKind, MenuOption, SessionState};
 use darkbluff_core::world::World;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Clear, Paragraph};
-use ratatui::Frame;
 
-use crate::app::{NpcInfo, NotePanel, Notice, StatusLine, Suggestions};
+use crate::app::{AnimationView, NotePanel, Notice, NpcInfo, StatusLine, Suggestions};
 use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::theme;
@@ -78,25 +78,35 @@ pub struct ViewState<'a> {
     pub notice: Option<&'a Notice>,
     pub map: Option<&'a [MapGroup]>,
     pub no_motion: bool,
+    pub animation: Option<AnimationView>,
 }
 
 /// 渲染一帧。标题态走整页首页，其余走常规三段布局。
 pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
     let area = frame.area();
     // 整屏铺底（CRUST），面板再覆 MANTLE，形成分层。
-    frame.render_widget(Block::default().style(Style::default().bg(theme::CRUST)), area);
+    frame.render_widget(
+        Block::default().style(Style::default().bg(theme::CRUST)),
+        area,
+    );
 
     if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
         draw_too_small(frame, area);
         return;
     }
-    if matches!(state.state, SessionState::Title) {
+    if matches!(
+        state.state,
+        SessionState::Title | SessionState::ChoosingSettings
+    ) {
         home::draw_home(frame, area, state);
         return;
     }
 
     // 外层 1 格留白，面板之间靠圆角边框自然分隔。
-    let inner = area.inner(Margin { vertical: 1, horizontal: 1 });
+    let inner = area.inner(Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
     let [header_a, body_a, input_a] = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(8),
@@ -111,6 +121,9 @@ pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
     layout::draw_scene(frame, scene_a, state);
     layout::draw_input(frame, input_a, state);
 
+    if let Some(animation) = &state.animation {
+        draw_animation(frame, header_a, animation);
+    }
     if let Some(notice) = state.notice {
         draw_notice(frame, header_a, notice);
     }
@@ -128,10 +141,30 @@ pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
     }
 }
 
+fn draw_animation(frame: &mut Frame, area: Rect, animation: &AnimationView) {
+    let pulse = if animation.progress < 0.5 {
+        "◆"
+    } else {
+        "◇"
+    };
+    let text = Paragraph::new(format!(" {pulse} {} ", animation.label))
+        .style(
+            Style::default()
+                .fg(theme::MAUVE)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center);
+    frame.render_widget(text, area);
+}
+
 /// 顶部通知条：覆盖 header 区，warning（黄）/ info（蓝），瞬时（下次按键清除）。
 fn draw_notice(frame: &mut Frame, area: Rect, notice: &Notice) {
     frame.render_widget(Clear, area);
-    let color = if notice.warn { theme::YELLOW } else { theme::BLUE };
+    let color = if notice.warn {
+        theme::YELLOW
+    } else {
+        theme::BLUE
+    };
     let text = Paragraph::new(format!(" ⚠ {}", notice.text))
         .style(Style::default().fg(color).add_modifier(Modifier::BOLD))
         .block(theme::panel(Some("Notice"), true));
@@ -140,8 +173,10 @@ fn draw_notice(frame: &mut Frame, area: Rect, notice: &Notice) {
 
 fn draw_too_small(frame: &mut Frame, area: Rect) {
     let block = theme::panel(Some("DarkBluff"), false);
-    let text = Paragraph::new(format!("Terminal too small (need >={MIN_WIDTH}x{MIN_HEIGHT})."))
-        .block(block)
-        .alignment(Alignment::Center);
+    let text = Paragraph::new(format!(
+        "Terminal too small (need >={MIN_WIDTH}x{MIN_HEIGHT})."
+    ))
+    .block(block)
+    .alignment(Alignment::Center);
     frame.render_widget(text, area);
 }

@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::content::condition::eval;
 use crate::content::dialogue::DialogueBook;
-use crate::content::loader::{load_all, LoadedContent};
+use crate::content::loader::{LoadedContent, load_all};
 use crate::content::models::{Chapter, Character, Clue, Judgment, Narrative, Scene, Topic};
 use crate::error::Result;
 use crate::world::World;
@@ -261,10 +261,7 @@ impl ContentEngine {
     // ----- 线索 -----
 
     pub fn get_clues(&self, chapter: &str) -> &[Clue] {
-        self.clues
-            .get(chapter)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
+        self.clues.get(chapter).map(|v| v.as_slice()).unwrap_or(&[])
     }
 
     // ----- 叙事文本 -----

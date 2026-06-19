@@ -109,7 +109,11 @@ impl<'a> Checker<'a> {
         let mut referenced_targets: HashSet<String> = HashSet::new();
         for sid in eng.scene_ids() {
             if let Some(scene) = eng.get_scene(sid) {
-                for t in scene.connections.iter().chain(scene.one_way_connections.iter()) {
+                for t in scene
+                    .connections
+                    .iter()
+                    .chain(scene.one_way_connections.iter())
+                {
                     referenced_targets.insert(t.clone());
                 }
             }
@@ -225,7 +229,9 @@ impl<'a> Checker<'a> {
         let mut color: HashMap<String, u8> = HashMap::new();
         for c in &chapters {
             if self.has_cycle(c, &adj, &mut color) {
-                self.err(format!("章节图存在环（涉及节点 {c}），next 指针不得构成循环"));
+                self.err(format!(
+                    "章节图存在环（涉及节点 {c}），next 指针不得构成循环"
+                ));
                 break;
             }
         }

@@ -11,6 +11,8 @@ mod terminal;
 mod theme;
 mod view;
 
+use std::sync::{Arc, atomic::AtomicBool};
+
 use darkbluff_core::content::ContentEngine;
 use darkbluff_core::engine::Session;
 use darkbluff_core::error::{AppError, Result};
@@ -28,5 +30,18 @@ pub fn run(engine: ContentEngine, options: TuiOptions) -> Result<()> {
     };
     let store = SaveStore::open(save_dir, Box::new(SystemClock))?;
     let session = Session::new(engine, store);
-    app::App::new(session, options.no_motion).run()
+    let terminate = Arc::new(AtomicBool::new(false));
+    install_sigterm_handler(Arc::clone(&terminate));
+    app::App::new(session, options.no_motion, terminate).run()
 }
+
+#[cfg(unix)]
+fn install_sigterm_handler(terminate: Arc<AtomicBool>) {
+    // 注册失败（罕见：信号已被注册、受限环境）则告警；此时 SIGTERM 回落默认处置。
+    if let Err(e) = signal_hook::flag::register(signal_hook::consts::SIGTERM, terminate) {
+        tracing::warn!("SIGTERM handler 注册失败，信号将走默认处置：{e}");
+    }
+}
+
+#[cfg(not(unix))]
+fn install_sigterm_handler(_: Arc<AtomicBool>) {}

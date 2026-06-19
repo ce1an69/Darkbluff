@@ -73,7 +73,9 @@ impl DialogueBook {
 
     /// 该话题是否为「单世界话题」（只存在一侧版本）。话题不存在返回 `None`。
     pub fn is_single_world(&self, topic: &str) -> Option<bool> {
-        self.by_topic.get(topic).map(|e| e.surface.is_some() ^ e.shadow.is_some())
+        self.by_topic
+            .get(topic)
+            .map(|e| e.surface.is_some() ^ e.shadow.is_some())
     }
 }
 

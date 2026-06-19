@@ -1,19 +1,19 @@
 //! 常规布局面板：标题条 / 对话转录 / 场景+NPC / 输入框。
 
 use darkbluff_core::engine::SessionState;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph, Wrap};
-use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::{NpcInfo, StatusKind};
 use crate::theme;
 
+use super::ViewState;
 use super::overlays::draw_suggestions;
 use super::text::{truncate_s, wrap_by_width};
-use super::ViewState;
 
 const INPUT_PROMPT: &str = "> ";
 const MAX_STATUS_COLS: usize = 30;
@@ -22,7 +22,8 @@ pub(super) fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) 
     let block = theme::panel(None, false);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let [left, right] = Layout::horizontal([Constraint::Min(0), Constraint::Length(20)]).areas(inner);
+    let [left, right] =
+        Layout::horizontal([Constraint::Min(0), Constraint::Length(20)]).areas(inner);
 
     let mut spans = vec![
         Span::styled(" ◆ ", Style::default().fg(theme::MAUVE)),
@@ -33,9 +34,15 @@ pub(super) fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) 
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw("  "),
-        Span::styled(state.title.to_string(), Style::default().fg(theme::SUBTEXT1)),
+        Span::styled(
+            state.title.to_string(),
+            Style::default().fg(theme::SUBTEXT1),
+        ),
         Span::styled(" · ", Style::default().fg(theme::OVERLAY0)),
-        Span::styled(state.scene_name.to_string(), Style::default().fg(theme::TEXT)),
+        Span::styled(
+            state.scene_name.to_string(),
+            Style::default().fg(theme::TEXT),
+        ),
         Span::raw("   "),
         Span::styled(
             format!("● {}", theme::world_label(state.world)),
@@ -72,9 +79,20 @@ pub(super) fn draw_transcript(frame: &mut Frame, area: Rect, state: &ViewState<'
 
     if state.transcript.is_empty() {
         let hint = Paragraph::new(Line::from(vec![
-            Span::styled("No dialogue yet. Type ", Style::default().fg(theme::SUBTEXT0)),
-            Span::styled("/ask", Style::default().fg(theme::MAUVE).add_modifier(Modifier::BOLD)),
-            Span::styled(" to question someone.", Style::default().fg(theme::SUBTEXT0)),
+            Span::styled(
+                "No dialogue yet. Type ",
+                Style::default().fg(theme::SUBTEXT0),
+            ),
+            Span::styled(
+                "/ask",
+                Style::default()
+                    .fg(theme::MAUVE)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " to question someone.",
+                Style::default().fg(theme::SUBTEXT0),
+            ),
         ]))
         .alignment(Alignment::Center)
         .block(block);
@@ -115,8 +133,11 @@ pub(super) fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
     let mut lines: Vec<Line<'_>> = scene_description_lines(state);
     lines.push(Line::from(""));
     lines.push(
-        Line::from("PRESENT")
-            .style(Style::default().fg(theme::OVERLAY1).add_modifier(Modifier::BOLD)),
+        Line::from("PRESENT").style(
+            Style::default()
+                .fg(theme::OVERLAY1)
+                .add_modifier(Modifier::BOLD),
+        ),
     );
     if state.npcs.is_empty() {
         lines.push(Line::from("  no one to ask here").style(Style::default().fg(theme::SUBTEXT0)));
@@ -125,7 +146,12 @@ pub(super) fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
         lines.push(npc_line(npc));
         lines.push(npc_topics_line(npc));
     }
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block), area);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .block(block),
+        area,
+    );
 }
 
 fn scene_title(state: &ViewState<'_>) -> String {
@@ -155,7 +181,10 @@ fn npc_line(npc: &NpcInfo) -> Line<'_> {
                 .fg(theme::MAUVE)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!("  ({})", npc.id), Style::default().fg(theme::OVERLAY0)),
+        Span::styled(
+            format!("  ({})", npc.id),
+            Style::default().fg(theme::OVERLAY0),
+        ),
     ])
 }
 
@@ -216,7 +245,9 @@ fn render_exploring_input(frame: &mut Frame, inner: Rect, state: &ViewState<'_>)
         Paragraph::new(Line::from(vec![
             Span::styled(
                 INPUT_PROMPT,
-                Style::default().fg(theme::MAUVE).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme::MAUVE)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(state.input.value(), Style::default().fg(theme::TEXT)),
         ])),

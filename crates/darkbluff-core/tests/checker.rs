@@ -1,6 +1,6 @@
 //! 启动校验（checker）的集成测试。
 
-use darkbluff_core::content::{check, CheckReport, ContentEngine, InMemorySource, Severity};
+use darkbluff_core::content::{CheckReport, ContentEngine, InMemorySource, Severity, check};
 
 /// 一个最小且合法的数据集，期望 0 error。
 fn valid_source() -> InMemorySource {
@@ -67,11 +67,13 @@ fn rejects_reserved_id_namespace() {
         .insert("chapters/c2/r.md", "终审。");
     let errs = err_msgs(&check_source(&src));
     assert!(
-        errs.iter().any(|m| m.contains("__leave") && m.contains("保留")),
+        errs.iter()
+            .any(|m| m.contains("__leave") && m.contains("保留")),
         "应拒绝 __ 前缀场景 id: {errs:?}"
     );
     assert!(
-        errs.iter().any(|m| m.contains("leave_attempt") && m.contains("保留")),
+        errs.iter()
+            .any(|m| m.contains("leave_attempt") && m.contains("保留")),
         "应拒绝保留触发器 id: {errs:?}"
     );
 }
@@ -89,7 +91,11 @@ fn detects_topic_missing_in_dialogue() {
         "id: c1\ntitle: 首\nscenes: [s]\nstarting_scene: s\ncharacters:\n  - id: wolf\n    topics:\n      - id: ghost\n        label: 幽灵话题\n        available: true\nrequired_judgments: [judge_wolf]\nnext:\n  default: c2\n",
     );
     let r = check_source(&src);
-    assert!(err_msgs(&r).iter().any(|m| m.contains("ghost") && m.contains("对话文件")));
+    assert!(
+        err_msgs(&r)
+            .iter()
+            .any(|m| m.contains("ghost") && m.contains("对话文件"))
+    );
 }
 
 #[test]
@@ -109,14 +115,22 @@ fn detects_judgment_target_not_in_characters() {
         "- id: judge_wolf\n  target: ghost\n  result: results/wolf.md\n",
     );
     let r = check_source(&src);
-    assert!(err_msgs(&r).iter().any(|m| m.contains("target") && m.contains("ghost")));
+    assert!(
+        err_msgs(&r)
+            .iter()
+            .any(|m| m.contains("target") && m.contains("ghost"))
+    );
 }
 
 #[test]
 fn detects_no_judgments() {
     let src = valid_source().insert("chapters/c1/judgments.yaml", "[]\n");
     let r = check_source(&src);
-    assert!(err_msgs(&r).iter().any(|m| m.contains("至少定义一个审判点")));
+    assert!(
+        err_msgs(&r)
+            .iter()
+            .any(|m| m.contains("至少定义一个审判点"))
+    );
 }
 
 #[test]
@@ -136,7 +150,11 @@ fn detects_clue_world_mismatch_real() {
             "## victim\n\n### [surface]\n\n受害者。\n",
         );
     let r = check_source(&src);
-    assert!(err_msgs(&r).iter().any(|m| m.contains("bad") && m.contains("world")));
+    assert!(
+        err_msgs(&r)
+            .iter()
+            .any(|m| m.contains("bad") && m.contains("world"))
+    );
 }
 
 #[test]
@@ -146,7 +164,11 @@ fn detects_unknown_condition_id() {
         "id: c1\ntitle: 首\nscenes: [s]\nstarting_scene: s\ncharacters:\n  - id: wolf\n    topics:\n      - id: whereabouts\n        label: 行踪\n        available: true\n      - id: secret\n        label: 秘密\n        available: false\n        unlock_after: no_such_clue\nrequired_judgments: [judge_wolf]\nnext:\n  default: c2\n",
     );
     let r = check_source(&src);
-    assert!(err_msgs(&r).iter().any(|m| m.contains("未知 id") && m.contains("no_such_clue")));
+    assert!(
+        err_msgs(&r)
+            .iter()
+            .any(|m| m.contains("未知 id") && m.contains("no_such_clue"))
+    );
 }
 
 #[test]
@@ -188,7 +210,11 @@ fn detects_ending_with_next() {
         "id: c2\ntitle: 终\nending: true\nscenes: [s]\nstarting_scene: s\nrequired_judgments: [judge_wolf]\nnext:\n  default: c1\n",
     );
     let r = check_source(&src);
-    assert!(err_msgs(&r).iter().any(|m| m.contains("终章") && m.contains("next")));
+    assert!(
+        err_msgs(&r)
+            .iter()
+            .any(|m| m.contains("终章") && m.contains("next"))
+    );
 }
 
 #[test]
@@ -327,8 +353,9 @@ fn cross_chapter_clue_is_advice_not_error() {
         .insert("chapters/c3/r.md", "终审。");
     let r = check_source(&src);
     assert!(!r.has_errors(), "errors: {:?}", err_msgs(&r));
-    assert!(r
-        .issues
-        .iter()
-        .any(|i| i.message.contains("shared") && i.severity == Severity::Advice));
+    assert!(
+        r.issues
+            .iter()
+            .any(|i| i.message.contains("shared") && i.severity == Severity::Advice)
+    );
 }

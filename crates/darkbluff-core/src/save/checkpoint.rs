@@ -6,8 +6,8 @@
 
 use crate::error::{AppError, Result};
 use crate::save::schema::{
-    before_judgment_id_base, chapter_start_id_base, unique_checkpoint_id, Checkpoint,
-    CheckpointKind, Save,
+    Checkpoint, CheckpointKind, Save, before_judgment_id_base, chapter_start_id_base,
+    unique_checkpoint_id,
 };
 use crate::world::World;
 
@@ -138,7 +138,8 @@ mod tests {
         // c1 → c2 流程：c1 有线索/对话/审判，已推进到 c2
         let mut save = Save::new_game("c1", "tavern", "t0".into());
         create_chapter_start(&mut save, "c1", "tavern", World::Surface, "t1");
-        save.clues_mut("c1").extend(["a", "b"].iter().map(|s| s.to_string()));
+        save.clues_mut("c1")
+            .extend(["a", "b"].iter().map(|s| s.to_string()));
         save.views_mut("c1").push(ViewedDialogue {
             character: "wolf".into(),
             topic: "whereabouts".into(),
@@ -175,13 +176,20 @@ mod tests {
 
         // 当前章回到 c1，审判被撤销（judgments 截断为 0），线索/对话保留
         assert_eq!(save.current_chapter, "c1");
-        assert_eq!(save.judgments_made.get("c1").map(|v| v.len()).unwrap_or(0), 0);
+        assert_eq!(
+            save.judgments_made.get("c1").map(|v| v.len()).unwrap_or(0),
+            0
+        );
         assert_eq!(save.collected_clues.get("c1").unwrap().len(), 2);
         assert_eq!(save.viewed_dialogues.get("c1").unwrap().len(), 1);
         // chapter_path：跨章回滚会截断 c2
         assert_eq!(save.chapter_path, vec!["c1"]);
         // before_judgment 检查点自身已被移除
-        assert!(save.checkpoints.iter().all(|c| c.kind != CheckpointKind::BeforeJudgment));
+        assert!(
+            save.checkpoints
+                .iter()
+                .all(|c| c.kind != CheckpointKind::BeforeJudgment)
+        );
     }
 
     #[test]
@@ -195,13 +203,20 @@ mod tests {
             .unwrap();
         map_checkpoint_rollback(&mut save, &start_id).unwrap();
         // chapter_start 检查点保留，其创建时三数组长度为 0 → 全部截断
-        assert_eq!(save.collected_clues.get("c1").map(|v| v.len()).unwrap_or(0), 0);
-        assert_eq!(save.judgments_made.get("c1").map(|v| v.len()).unwrap_or(0), 0);
+        assert_eq!(
+            save.collected_clues.get("c1").map(|v| v.len()).unwrap_or(0),
+            0
+        );
+        assert_eq!(
+            save.judgments_made.get("c1").map(|v| v.len()).unwrap_or(0),
+            0
+        );
         // chapter_start 自身仍在
-        assert!(save
-            .checkpoints
-            .iter()
-            .any(|c| c.kind == CheckpointKind::ChapterStart && c.chapter == "c1"));
+        assert!(
+            save.checkpoints
+                .iter()
+                .any(|c| c.kind == CheckpointKind::ChapterStart && c.chapter == "c1")
+        );
     }
 
     #[test]

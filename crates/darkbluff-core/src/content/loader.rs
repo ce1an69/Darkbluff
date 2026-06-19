@@ -67,9 +67,8 @@ impl DataSource for FilesystemSource {
 
     fn read(&self, rel_path: &str) -> Result<String> {
         let path = self.join(rel_path);
-        std::fs::read_to_string(&path).map_err(|e| {
-            AppError::Content(format!("读取数据文件失败 {}: {e}", path.display()))
-        })
+        std::fs::read_to_string(&path)
+            .map_err(|e| AppError::Content(format!("读取数据文件失败 {}: {e}", path.display())))
     }
 
     fn exists(&self, rel_path: &str) -> bool {
@@ -163,7 +162,7 @@ pub fn parse_scene_override_name(name: &str) -> Option<(String, crate::world::Wo
 
 use std::collections::HashSet;
 
-use crate::content::dialogue::{parse_dialogue, DialogueBook};
+use crate::content::dialogue::{DialogueBook, parse_dialogue};
 use crate::content::models::{Chapter, Character, Clue, Judgment, Scene};
 use crate::world::World;
 
@@ -385,7 +384,10 @@ mod tests {
     fn in_memory_list_and_read() {
         let src = InMemorySource::new()
             .insert("chapters/c1/chapter.yaml", "id: c1\n")
-            .insert("chapters/c1/dialogues/wolf.md", "## t\n\n### [surface]\n\nx\n");
+            .insert(
+                "chapters/c1/dialogues/wolf.md",
+                "## t\n\n### [surface]\n\nx\n",
+            );
         let names = src.list_dir("chapters").unwrap();
         assert_eq!(names, vec!["c1"]);
         let dlg = src.list_dir("chapters/c1/dialogues").unwrap();
@@ -393,7 +395,11 @@ mod tests {
         assert!(src.exists("chapters/c1/chapter.yaml"));
         assert!(src.exists("chapters/c1/dialogues"));
         assert!(!src.exists("chapters/c2"));
-        assert!(src.read("chapters/c1/dialogues/wolf.md").unwrap().contains("## t"));
+        assert!(
+            src.read("chapters/c1/dialogues/wolf.md")
+                .unwrap()
+                .contains("## t")
+        );
     }
 
     #[test]

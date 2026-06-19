@@ -67,7 +67,11 @@ impl<'de> Deserialize<'de> for Condition {
                     (None, Some(v), None) => Ok(Condition::AnyOf(v)),
                     (None, None, Some(s)) => Ok(Condition::Not(s)),
                     // present == 1 保证三选一，其余分支不可达
-                    _ => return Err(D::Error::custom("条件表达式须为裸 id、all_of、any_of 或 not 之一")),
+                    _ => {
+                        return Err(D::Error::custom(
+                            "条件表达式须为裸 id、all_of、any_of 或 not 之一",
+                        ));
+                    }
                 }
             }
         }
@@ -282,10 +286,7 @@ mod tests {
 
     #[test]
     fn condition_rejects_mixing() {
-        assert!(serde_yml::from_str::<Condition>(
-            "all_of:\n  - a\nany_of:\n  - b\n"
-        )
-        .is_err());
+        assert!(serde_yml::from_str::<Condition>("all_of:\n  - a\nany_of:\n  - b\n").is_err());
     }
 
     #[test]
@@ -296,10 +297,7 @@ mod tests {
     #[test]
     fn condition_rejects_nested() {
         // all_of 的列表项只能是字符串；嵌套映射会被类型拒绝
-        assert!(serde_yml::from_str::<Condition>(
-            "all_of:\n  - not: a\n"
-        )
-        .is_err());
+        assert!(serde_yml::from_str::<Condition>("all_of:\n  - not: a\n").is_err());
     }
 
     #[test]
@@ -352,9 +350,15 @@ next:
         assert_eq!(ch.ending, false);
         assert_eq!(ch.order, 1);
         assert_eq!(ch.starting_scene, "tavern");
-        assert_eq!(ch.required_judgments.as_deref(), Some(&["judge_wolf".to_string()][..]));
+        assert_eq!(
+            ch.required_judgments.as_deref(),
+            Some(&["judge_wolf".to_string()][..])
+        );
         let wolf = &ch.characters[0];
-        assert_eq!(wolf.appears_in.as_deref(), Some(&["tavern".to_string()][..]));
+        assert_eq!(
+            wolf.appears_in.as_deref(),
+            Some(&["tavern".to_string()][..])
+        );
         assert_eq!(wolf.topics.len(), 2);
         assert!(wolf.topics[0].available);
         assert!(!wolf.topics[1].available);

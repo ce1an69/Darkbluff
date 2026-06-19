@@ -14,7 +14,7 @@ CLI/TUI 文字推理游戏。玩家扮演一只异色瞳的猫——右眼看表
 
 ## 当前状态
 
-核心引擎(content/save/engine/cli)与 TUI 渲染层已完成,**137 测试通过**。
+核心引擎(content/save/engine/cli)与 TUI 渲染层已完成,**171 测试通过**。
 
 TUI:圆角 Catppuccin 紫色主题;左侧 markdown 对话转录、右侧场景描述 + 在场 NPC,底部 Claude-Code 式斜杠指令输入(`/ask`、`/judge`... 输入即自动补全,候选与引擎菜单同源);界面文案英文,剧情内容随数据语言。
 
@@ -33,7 +33,7 @@ cargo run -- --data-dir crates/darkbluff-core/tests/fixtures/data
 cargo test
 ```
 
-游戏内操作:标题菜单 `↑/↓` 选择、`Enter` 确认;探索态输入 `/` 触发指令补全,`Tab` 补全、`Enter` 提交;任意状态 `Ctrl+C` 存档退出。指令:`ask / judge / move / gaze / note / map / help / quit`。
+游戏内操作:标题菜单 `↑/↓` 选择、`Enter` 确认;探索态输入 `/` 触发指令补全,`Tab` 补全、`Enter` 提交;任意状态 `Ctrl+C` 存档退出。TUI 推荐输入 `/ask`、`/judge` 等斜杠形式;底层引擎仍接受裸命令 `ask / judge / move / gaze / note / map / help / quit`。
 
 ## 技术栈
 

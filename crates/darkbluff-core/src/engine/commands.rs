@@ -15,13 +15,9 @@ pub enum Command {
         topic: Option<String>,
     },
     /// `judge [目标]`
-    Judge {
-        target: Option<String>,
-    },
+    Judge { target: Option<String> },
     /// `move [目的地]`
-    Move {
-        dest: Option<String>,
-    },
+    Move { dest: Option<String> },
     /// `gaze`
     Gaze,
     /// `map`
@@ -29,9 +25,7 @@ pub enum Command {
     /// `note`
     Note,
     /// `help [指令?]`
-    Help {
-        cmd: Option<String>,
-    },
+    Help { cmd: Option<String> },
     /// `quit`
     Quit,
 }
@@ -50,7 +44,9 @@ pub enum ParseOutcome {
 }
 
 /// 已知指令名（用于 help 列举与校验）。
-pub const COMMAND_NAMES: &[&str] = &["ask", "judge", "move", "gaze", "map", "note", "help", "quit"];
+pub const COMMAND_NAMES: &[&str] = &[
+    "ask", "judge", "move", "gaze", "map", "note", "help", "quit",
+];
 
 /// 一句话用途说明（按指令名）。
 pub fn command_summary(name: &str) -> Option<&'static str> {
@@ -200,11 +196,17 @@ mod tests {
     fn parses_ask_variants() {
         assert_eq!(
             parse("ask"),
-            ParseOutcome::Ok(Command::Ask { target: None, topic: None })
+            ParseOutcome::Ok(Command::Ask {
+                target: None,
+                topic: None
+            })
         );
         assert_eq!(
             parse("ask wolf"),
-            ParseOutcome::Ok(Command::Ask { target: Some("wolf".into()), topic: None })
+            ParseOutcome::Ok(Command::Ask {
+                target: Some("wolf".into()),
+                topic: None
+            })
         );
         assert_eq!(
             parse("ask wolf whereabouts"),
@@ -219,20 +221,23 @@ mod tests {
     fn parses_judge_move_help() {
         assert_eq!(
             parse("judge wolf"),
-            ParseOutcome::Ok(Command::Judge { target: Some("wolf".into()) })
+            ParseOutcome::Ok(Command::Judge {
+                target: Some("wolf".into())
+            })
         );
         assert_eq!(
             parse("move market"),
-            ParseOutcome::Ok(Command::Move { dest: Some("market".into()) })
+            ParseOutcome::Ok(Command::Move {
+                dest: Some("market".into())
+            })
         );
         assert_eq!(
             parse("help ask"),
-            ParseOutcome::Ok(Command::Help { cmd: Some("ask".into()) })
+            ParseOutcome::Ok(Command::Help {
+                cmd: Some("ask".into())
+            })
         );
-        assert_eq!(
-            parse("help"),
-            ParseOutcome::Ok(Command::Help { cmd: None })
-        );
+        assert_eq!(parse("help"), ParseOutcome::Ok(Command::Help { cmd: None }));
     }
 
     #[test]
@@ -261,14 +266,26 @@ mod tests {
     #[test]
     fn unknown_command() {
         assert_eq!(parse("fly"), ParseOutcome::Unknown("fly".into()));
-        assert_eq!(parse("xyzzy moon"), ParseOutcome::Unknown("xyzzy moon".into()));
+        assert_eq!(
+            parse("xyzzy moon"),
+            ParseOutcome::Unknown("xyzzy moon".into())
+        );
     }
 
     #[test]
     fn no_arg_commands_reject_extra_args() {
-        assert_eq!(parse("gaze moon"), ParseOutcome::TooManyArguments("gaze".into()));
-        assert_eq!(parse("map now"), ParseOutcome::TooManyArguments("map".into()));
-        assert_eq!(parse("quit please"), ParseOutcome::TooManyArguments("quit".into()));
+        assert_eq!(
+            parse("gaze moon"),
+            ParseOutcome::TooManyArguments("gaze".into())
+        );
+        assert_eq!(
+            parse("map now"),
+            ParseOutcome::TooManyArguments("map".into())
+        );
+        assert_eq!(
+            parse("quit please"),
+            ParseOutcome::TooManyArguments("quit".into())
+        );
     }
 
     #[test]

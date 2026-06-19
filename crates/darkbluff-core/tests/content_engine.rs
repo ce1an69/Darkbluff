@@ -163,7 +163,8 @@ fn judgments_and_results() {
     assert_eq!(js.len(), 1);
     assert_eq!(js[0].target, "wolf");
     assert_eq!(
-        e.get_judgment_for_character("c1", "wolf").map(|j| j.id.as_str()),
+        e.get_judgment_for_character("c1", "wolf")
+            .map(|j| j.id.as_str()),
         Some("judge_wolf")
     );
     assert_eq!(e.get_result_text("c1", "judge_wolf"), Some("灰狼受审。"));

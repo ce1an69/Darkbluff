@@ -1,11 +1,14 @@
 //! 标题态整页首页：双色块状 logo + 菜单，垂直居中。
 
+use std::borrow::Cow;
+
 use darkbluff_core::engine::MenuOption;
+use darkbluff_core::save::Motion;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
 
 use crate::theme;
 
@@ -13,7 +16,10 @@ use super::ViewState;
 
 /// 整页首页：logo(6 行) + 菜单，整体垂直居中。
 pub(super) fn draw_home(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
-    frame.render_widget(Block::default().style(Style::default().bg(theme::CRUST)), area);
+    frame.render_widget(
+        Block::default().style(Style::default().bg(theme::CRUST)),
+        area,
+    );
 
     let options: &[MenuOption] = state.menu.as_ref().map(|m| m.options).unwrap_or(&[]);
     let selected = state.menu.as_ref().map(|m| m.selected).unwrap_or(0);
@@ -53,7 +59,7 @@ fn render_menu(frame: &mut Frame, area: Rect, mut y: u16, options: &[MenuOption]
         let marker = if sel { "▶ " } else { "  " };
         let line = Line::from(format!(
             "{marker}{}",
-            title_option_label(&opt.id, opt.label.as_str())
+            title_option_label(&opt.id, &opt.label)
         ))
         .style(style);
         render_centered(frame, area, y, line);
@@ -71,13 +77,18 @@ fn logo_line(row: &str) -> Line<'static> {
     ])
 }
 
-/// 标题菜单项英文标签（按引擎 option id 映射，未知则回退原标签）。
-fn title_option_label<'a>(id: &str, label: &'a str) -> &'a str {
+/// 标题菜单项英文标签（按引擎 option id 映射；motion 项复用 `Motion::en_label`，
+/// 未知 id 回退原标签）。返回 `Cow` 使已知映射零分配。
+fn title_option_label<'a>(id: &str, label: &'a str) -> Cow<'a, str> {
     match id {
-        "new_game" => "New Game",
-        "continue" => "Continue",
-        "quit" => "Quit",
-        _ => label,
+        "new_game" => Cow::Borrowed("New Game"),
+        "continue" => Cow::Borrowed("Continue"),
+        "settings" => Cow::Borrowed("Settings"),
+        "quit" => Cow::Borrowed("Quit"),
+        _ => match Motion::from_menu_id(id) {
+            Some(motion) => Cow::Borrowed(motion.en_label()),
+            None => Cow::Borrowed(label),
+        },
     }
 }
 
@@ -103,6 +114,14 @@ mod tests {
     fn maps_known_title_option_ids_to_english() {
         assert_eq!(title_option_label("new_game", "新游戏"), "New Game");
         assert_eq!(title_option_label("continue", "继续"), "Continue");
+        assert_eq!(title_option_label("settings", "设置"), "Settings");
+        // motion 项由 id 经 Motion::en_label 映射，label 内容不再参与。
+        assert_eq!(title_option_label("motion_full", "动画：完整"), "Motion: Full");
+        assert_eq!(
+            title_option_label("motion_reduced", "动画：减少"),
+            "Motion: Reduced"
+        );
+        assert_eq!(title_option_label("motion_off", "动画：关闭"), "Motion: Off");
         assert_eq!(title_option_label("quit", "退出"), "Quit");
     }
 

@@ -1,6 +1,6 @@
 //! 笔记视图构建：遍历 `chapter_path` 收集对话/叙事/审判快照。
 
-use crate::engine::outcome::{NoteDialogue, NoteJudgment, NoteNarrative, NoteVoice, NoteView};
+use crate::engine::outcome::{NoteDialogue, NoteJudgment, NoteNarrative, NoteView, NoteVoice};
 use crate::engine::state::Session;
 
 impl Session {

@@ -5,7 +5,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use darkbluff_core::content::{check, ContentEngine, InMemorySource};
+use darkbluff_core::content::{ContentEngine, InMemorySource, check};
 use darkbluff_core::engine::{Input, Outcome, Session, SessionState};
 use darkbluff_core::save::{FakeClock, SaveStore};
 
@@ -56,7 +56,10 @@ fn src() -> InMemorySource {
 fn new_session(tag: &str) -> Session {
     let engine = ContentEngine::load(&src()).expect("load");
     let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("darkbluff-trigger-{tag}-{}-{n}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "darkbluff-trigger-{tag}-{}-{n}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     let store = SaveStore::open(dir, Box::new(FakeClock::new())).expect("open store");
     Session::new(engine, store)
@@ -66,7 +69,10 @@ fn new_session(tag: &str) -> Session {
 fn dataset_is_valid() {
     let engine = ContentEngine::load(&src()).expect("load");
     let errors: Vec<String> = check(&engine).errors().map(|i| i.message.clone()).collect();
-    assert!(errors.is_empty(), "trigger dataset has check errors: {errors:?}");
+    assert!(
+        errors.is_empty(),
+        "trigger dataset has check errors: {errors:?}"
+    );
 }
 
 #[test]
@@ -76,13 +82,14 @@ fn narrative_drains_on_chapter_enter() {
     assert!(matches!(s.start_new_game(), Outcome::Narrative { .. }));
     assert_eq!(*s.state(), SessionState::ShowingNarrative);
     assert!(s.save().discovered.triggered("voice_open"));
-    assert!(s
-        .save()
-        .viewed_narrative
-        .get("c1")
-        .unwrap()
-        .iter()
-        .any(|n| n.id == "voice_open"));
+    assert!(
+        s.save()
+            .viewed_narrative
+            .get("c1")
+            .unwrap()
+            .iter()
+            .any(|n| n.id == "voice_open")
+    );
     // Ack 心声 → 无更多 → 回探索态（场景描述）。
     assert!(matches!(s.handle(Input::Ack), Outcome::Message(_)));
     assert_eq!(*s.state(), SessionState::Exploring);

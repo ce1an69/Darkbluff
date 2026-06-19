@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use darkbluff_core::content::{check, ContentEngine, FilesystemSource};
+use darkbluff_core::content::{ContentEngine, FilesystemSource, check};
 use darkbluff_core::engine::{Input, Outcome, Selection, Session, SessionState};
 use darkbluff_core::save::{FakeClock, SaveStore};
 
@@ -82,9 +82,10 @@ fn gaze_switches_world_and_collects_shadow_clue() {
     s.handle(Input::Text("gaze".into()));
     // 影子侧问 whereabouts → 收集 wolf_alibi_shadow
     s.handle(Input::Text("ask wolf whereabouts".into()));
-    assert!(s
-        .save()
-        .has_clue("the_missing_butcher", "wolf_alibi_shadow"));
+    assert!(
+        s.save()
+            .has_clue("the_missing_butcher", "wolf_alibi_shadow")
+    );
 }
 
 #[test]
@@ -101,20 +102,22 @@ fn judging_crow_then_wolf_reaches_truth_ending() {
     // 再审 wolf → 必要审判完成 → 命中 all_of(both) → tavern_truth
     s.handle(Input::Text("judge wolf".into()));
     assert_eq!(s.save().current_chapter, "tavern_truth");
-    assert!(s
-        .save()
-        .discovered
-        .chapters
-        .contains(&"tavern_truth".to_string()));
+    assert!(
+        s.save()
+            .discovered
+            .chapters
+            .contains(&"tavern_truth".to_string())
+    );
 
     // 终章审判 → 结局（有 outro）→ ShowingOutro
     s.handle(Input::Text("judge wolf".into()));
     assert_eq!(*s.state(), SessionState::ShowingOutro);
-    assert!(s
-        .save()
-        .discovered
-        .endings
-        .contains(&"tavern_truth".to_string()));
+    assert!(
+        s.save()
+            .discovered
+            .endings
+            .contains(&"tavern_truth".to_string())
+    );
 
     // 确认结局 → Ending
     match s.handle(Input::Ack) {
@@ -167,11 +170,12 @@ fn map_rollback_before_judgment_undoes_judgment() {
     // before_judgment 检查点已移除（审判撤销），仅剩 chapter_start
     assert_eq!(s.save().checkpoints.len(), 1);
     // discovered 仍保留该章记忆
-    assert!(s
-        .save()
-        .discovered
-        .chapters
-        .contains(&"the_missing_butcher".to_string()));
+    assert!(
+        s.save()
+            .discovered
+            .chapters
+            .contains(&"the_missing_butcher".to_string())
+    );
 }
 
 #[test]

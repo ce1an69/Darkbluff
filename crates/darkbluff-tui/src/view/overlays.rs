@@ -1,17 +1,17 @@
 //! 浮层：选择菜单 / 确认对话框 / 斜杠补全浮层。
 
 use darkbluff_core::engine::{ConfirmationAction, MenuKind};
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
-use ratatui::Frame;
 
 use crate::app::{SuggestKind, Suggestions};
 use crate::theme;
 
-use super::text::truncate_s;
 use super::MenuView;
+use super::text::truncate_s;
 
 /// 选择菜单（圆角浮层，可滚动）。
 pub(super) fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
@@ -27,7 +27,10 @@ pub(super) fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{}. ", i + 1), Style::default().fg(theme::MAUVE)),
                 Span::styled(option.label.as_str(), Style::default().fg(theme::TEXT)),
-                Span::styled(format!("  ({})", option.id), Style::default().fg(theme::OVERLAY0)),
+                Span::styled(
+                    format!("  ({})", option.id),
+                    Style::default().fg(theme::OVERLAY0),
+                ),
             ]))
         })
         .collect();
@@ -39,6 +42,9 @@ pub(super) fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
 fn menu_title(kind: MenuKind) -> &'static str {
     match kind {
         MenuKind::Title => "Title",
+        // Settings 实际由 view::home::draw_home 渲染（ChoosingSettings 走标题子屏），
+        // 此分支不会被 draw_menu 触达，仅为 match 穷尽性保留。
+        MenuKind::Settings => "Settings",
         MenuKind::AskCharacter => "Ask Character",
         MenuKind::AskTopic => "Ask Topic",
         MenuKind::JudgeCharacter => "Judge",
@@ -60,7 +66,10 @@ pub(super) fn draw_confirmation(frame: &mut Frame, area: Rect, action: &Confirma
             .style(Style::default().fg(theme::SUBTEXT0))
             .centered(),
     ]);
-    frame.render_widget(Paragraph::new(text).block(block).wrap(Wrap { trim: true }), popup);
+    frame.render_widget(
+        Paragraph::new(text).block(block).wrap(Wrap { trim: true }),
+        popup,
+    );
 }
 
 fn confirm_prompt(action: &ConfirmationAction) -> String {
@@ -95,7 +104,10 @@ pub(super) fn draw_suggestions(frame: &mut Frame, input_area: Rect, sg: &Suggest
         .iter()
         .map(|it| {
             ListItem::new(Line::from(vec![
-                Span::styled(truncate_s(&it.display, 18), Style::default().fg(theme::TEXT)),
+                Span::styled(
+                    truncate_s(&it.display, 18),
+                    Style::default().fg(theme::TEXT),
+                ),
                 Span::raw("  "),
                 Span::styled(it.desc.clone(), Style::default().fg(theme::OVERLAY0)),
             ]))

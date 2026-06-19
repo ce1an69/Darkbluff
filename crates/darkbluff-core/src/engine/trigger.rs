@@ -9,11 +9,11 @@
 //! - **走不出去**：由场景 `exit_attempt` 承载，`move` 伪出口 `__leave` 触发
 //!   （见 [`crate::engine::navigation`]），首次展示完整文本，之后简短提示，不移动。
 
+use crate::content::LEAVE_ATTEMPT_TRIGGER;
 use crate::content::condition::eval;
 use crate::engine::condition::build_factset;
 use crate::engine::outcome::{Message, Outcome, SessionState};
 use crate::engine::state::{NarrativeFollowUp, PendingAction, Session};
-use crate::content::LEAVE_ATTEMPT_TRIGGER;
 use crate::save::schema::NarrativeSeen;
 use crate::save::snapshot::narrative_snapshot_path;
 

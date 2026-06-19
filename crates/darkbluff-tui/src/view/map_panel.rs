@@ -4,11 +4,11 @@
 //! 的检查点（章节开始 / 审判前）与话题进度。选择（↑/↓ + Enter 回滚）仍由引擎的
 //! `ChoosingCheckpoint` 菜单驱动——本面板按章节分组呈现同一组 checkpoint，并高亮当前选中。
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Wrap};
-use ratatui::Frame;
 
 use crate::theme;
 use crate::view::MapGroup;
@@ -21,7 +21,8 @@ pub(super) fn draw_map_panel(frame: &mut Frame, area: Rect, groups: &[MapGroup],
 
     let mut lines: Vec<Line<'static>> = Vec::new();
     if groups.is_empty() {
-        lines.push(Line::from("还没有可以回到的节点。").style(Style::default().fg(theme::SUBTEXT0)));
+        lines
+            .push(Line::from("还没有可以回到的节点。").style(Style::default().fg(theme::SUBTEXT0)));
     } else {
         for g in groups {
             let marker = if g.is_current { "▶" } else { " " };
@@ -52,7 +53,9 @@ pub(super) fn draw_map_panel(frame: &mut Frame, area: Rect, groups: &[MapGroup],
                 let prefix = if is_sel { "    ▶ " } else { "      " };
                 let num = row.flat_index + 1;
                 let style = if is_sel {
-                    Style::default().fg(theme::TEXT).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(theme::TEXT)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(theme::SUBTEXT0)
                 };

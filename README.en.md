@@ -14,7 +14,7 @@ Seven sins. Seven judgments. Each judgment peels back a layer of the town, and a
 
 ## Status
 
-Core engine (content/save/engine/CLI) and the TUI render layer are complete — **137 tests passing**.
+Core engine (content/save/engine/CLI) and the TUI render layer are complete — **171 tests passing**.
 
 The TUI features a rounded Catppuccin-purple theme, a markdown dialogue transcript on the left, a scene description + present NPCs panel on the right, and a Claude-Code-style slash command input at the bottom (`/ask`, `/judge`, ... with autocompletion sourced from the engine's own menus). UI chrome is in English; story content follows the data language.
 
@@ -33,7 +33,7 @@ cargo run -- --data-dir crates/darkbluff-core/tests/fixtures/data
 cargo test
 ```
 
-In-game: title menu uses `↑/↓` to choose and `Enter` to confirm; in exploration, type `/` to trigger command autocompletion, `Tab` to complete, `Enter` to submit; `Ctrl+C` saves and quits from any state. Commands: `ask / judge / move / gaze / note / map / help / quit`.
+In-game: title menu uses `↑/↓` to choose and `Enter` to confirm; in exploration, type `/` to trigger command autocompletion, `Tab` to complete, `Enter` to submit; `Ctrl+C` saves and quits from any state. The TUI recommends slash commands such as `/ask` and `/judge`; the engine still accepts bare commands: `ask / judge / move / gaze / note / map / help / quit`.
 
 ## Tech Stack
 

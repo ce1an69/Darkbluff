@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::save::atomic::{backup_then_atomic_write, bak_path, corrupt_path};
 use crate::save::clock::Clock;
 use crate::save::migration::migrate;
-use crate::save::schema::{Save, Settings, CURRENT_VERSION};
+use crate::save::schema::{CURRENT_VERSION, Save, Settings};
 use crate::save::snapshot::SnapshotStore;
 
 /// 加载结果。
@@ -289,12 +289,18 @@ mod tests {
     #[test]
     fn settings_roundtrip_and_default() {
         let s = store("settings");
-        assert_eq!(s.load_settings().unwrap().motion, crate::save::schema::Motion::Full);
+        assert_eq!(
+            s.load_settings().unwrap().motion,
+            crate::save::schema::Motion::Full
+        );
         let settings = Settings {
             motion: crate::save::schema::Motion::Off,
             ..Settings::default()
         };
         s.save_settings(&settings).unwrap();
-        assert_eq!(s.load_settings().unwrap().motion, crate::save::schema::Motion::Off);
+        assert_eq!(
+            s.load_settings().unwrap().motion,
+            crate::save::schema::Motion::Off
+        );
     }
 }

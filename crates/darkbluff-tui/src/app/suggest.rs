@@ -1,11 +1,13 @@
 //! 斜杠补全：候选计算、浮层导航、补全替换。
 
-use darkbluff_core::engine::{ask_topic_options, move_options, Session, unjudged_character_options};
+use darkbluff_core::engine::{
+    Session, ask_topic_options, move_options, unjudged_character_options,
+};
 
 use crate::command;
 
-use super::types::{SuggestKind, Suggestion, Suggestions};
 use super::App;
+use super::types::{SuggestKind, Suggestion, Suggestions};
 
 impl App {
     /// 输入变更后重算补全候选（仅光标在行尾时）。
@@ -59,7 +61,8 @@ fn compute_suggestions(input: &str, session: &Session) -> Option<Suggestions> {
     let ends_space = input.ends_with(' ');
     let tokens: Vec<&str> = trimmed.split_whitespace().collect();
 
-    if tokens.len() <= 1 && !ends_space
+    if tokens.len() <= 1
+        && !ends_space
         && let Some(query) = trimmed.strip_prefix('/')
     {
         return command_suggestions(query);
@@ -91,8 +94,16 @@ fn arg_suggestions(tokens: &[&str], ends_space: bool, session: &Session) -> Opti
     if !command::is_known(verb) {
         return None;
     }
-    let partial = if ends_space { "" } else { tokens.last().copied().unwrap_or("") };
-    let arg_pos = if ends_space { tokens.len() } else { tokens.len().saturating_sub(1) };
+    let partial = if ends_space {
+        ""
+    } else {
+        tokens.last().copied().unwrap_or("")
+    };
+    let arg_pos = if ends_space {
+        tokens.len()
+    } else {
+        tokens.len().saturating_sub(1)
+    };
 
     let save = session.save();
     let engine = session.engine();
@@ -107,10 +118,14 @@ fn arg_suggestions(tokens: &[&str], ends_space: bool, session: &Session) -> Opti
                 .map(|c| (c.id.clone(), c.name.clone()))
                 .collect::<Vec<_>>(),
         ),
-        ("ask", 2) if tokens.len() >= 2 => {
-            (SuggestKind::Topic, ask_topic_options(engine, save, tokens[1]))
-        }
-        ("judge", 1) => (SuggestKind::Character, unjudged_character_options(engine, save)),
+        ("ask", 2) if tokens.len() >= 2 => (
+            SuggestKind::Topic,
+            ask_topic_options(engine, save, tokens[1]),
+        ),
+        ("judge", 1) => (
+            SuggestKind::Character,
+            unjudged_character_options(engine, save),
+        ),
         ("move", 1) => (
             SuggestKind::Scene,
             move_options(engine, save)
@@ -206,7 +221,10 @@ mod tests {
 
     #[test]
     fn filter_opts_matches_id_or_label() {
-        let cands = vec![("wolf".into(), "灰狼".into()), ("crow".into(), "乌鸦".into())];
+        let cands = vec![
+            ("wolf".into(), "灰狼".into()),
+            ("crow".into(), "乌鸦".into()),
+        ];
         assert_eq!(filter_opts(cands.clone(), "wo").len(), 1); // id 前缀
         assert_eq!(filter_opts(cands.clone(), "灰").len(), 1); // label 包含
         assert!(filter_opts(cands.clone(), "zzz").is_empty()); // 无匹配

@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 /// 默认日志级别。
 const DEFAULT_LEVEL: &str = "warn";

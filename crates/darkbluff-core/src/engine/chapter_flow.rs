@@ -62,8 +62,8 @@ impl Session {
             Some(c) => c.to_string(),
             None => {
                 return Outcome::Message(Message::info(vec![
-                    "找不到首章（内容校验未通过）。".into()
-                ]))
+                    "找不到首章（内容校验未通过）。".into(),
+                ]));
             }
         };
         let Some(ch) = self.engine.get_chapter(&first) else {
@@ -75,7 +75,7 @@ impl Session {
         match self.store.new_game(&first, &ch.starting_scene) {
             Ok(save) => self.save = save,
             Err(e) => {
-                return Outcome::Message(Message::info(vec![format!("无法初始化新游戏：{e}")]))
+                return Outcome::Message(Message::info(vec![format!("无法初始化新游戏：{e}")]));
             }
         }
         self.pending = Default::default();

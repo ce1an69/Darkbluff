@@ -7,4 +7,6 @@ edition.workspace = true
 darkbluff-core = { path = "../darkbluff-core" }
 crossterm = "0.28.1"
 ratatui = "0.29.0"
+signal-hook = "0.3.18"
+tracing = "0.1.44"
 unicode-width = "0.2.0"

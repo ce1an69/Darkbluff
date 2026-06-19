@@ -3,6 +3,7 @@
 use darkbluff_core::engine::{
     ConfirmationAction, MenuKind, MenuOption, Message, MessageLevel, NoteView, Outcome,
 };
+use darkbluff_core::save::Motion;
 use ratatui::style::{Modifier, Style};
 
 use crate::markdown::{self, StyledLine};
@@ -18,14 +19,20 @@ impl App {
     /// 把一帧引擎产出映射到转录/菜单/状态。
     pub(super) fn process_outcome(&mut self, outcome: Outcome) {
         match outcome {
-            Outcome::Dialogue { header, body, notes } => self.apply_dialogue(header, body, notes),
+            Outcome::Dialogue {
+                header,
+                body,
+                notes,
+            } => self.apply_dialogue(header, body, notes),
             Outcome::ChapterIntro { text } => self.apply_chapter_card("▌ Intro", &text),
             Outcome::ChapterOutro { text } => self.apply_chapter_card("▌ Outro", &text),
             Outcome::Narrative { label, text } => self.apply_narrative(label, &text),
             Outcome::Notes(notes) => self.apply_notes(notes),
-            Outcome::EndingReached { title, found, total } => {
-                self.apply_ending(title, found, total)
-            }
+            Outcome::EndingReached {
+                title,
+                found,
+                total,
+            } => self.apply_ending(title, found, total),
             Outcome::Message(message) => self.apply_message(message),
             Outcome::MenuRequested { kind, options, .. } => self.apply_menu(kind, options),
             Outcome::ConfirmationRequested { action, .. } => self.apply_confirmation(action),
@@ -60,15 +67,20 @@ impl App {
 
     fn apply_notes(&mut self, notes: NoteView) {
         // 默认聚焦首个有内容的标签；全空则回叙事。
-        let tab = [NoteTab::Narrative, NoteTab::Dialogue, NoteTab::Judgment, NoteTab::Voice]
-            .into_iter()
-            .find(|t| match *t {
-                NoteTab::Narrative => !notes.narratives.is_empty(),
-                NoteTab::Dialogue => !notes.dialogues.is_empty(),
-                NoteTab::Judgment => !notes.judgments.is_empty(),
-                NoteTab::Voice => !notes.voices.is_empty(),
-            })
-            .unwrap_or(NoteTab::Narrative);
+        let tab = [
+            NoteTab::Narrative,
+            NoteTab::Dialogue,
+            NoteTab::Judgment,
+            NoteTab::Voice,
+        ]
+        .into_iter()
+        .find(|t| match *t {
+            NoteTab::Narrative => !notes.narratives.is_empty(),
+            NoteTab::Dialogue => !notes.dialogues.is_empty(),
+            NoteTab::Judgment => !notes.judgments.is_empty(),
+            NoteTab::Voice => !notes.voices.is_empty(),
+        })
+        .unwrap_or(NoteTab::Narrative);
         self.note_panel = Some(NotePanel { view: notes, tab });
     }
 
@@ -110,11 +122,12 @@ impl App {
     }
 
     fn apply_menu(&mut self, kind: MenuKind, options: Vec<MenuOption>) {
+        let selected = selected_for_menu(kind, &options, self.session.settings().motion);
         self.confirmation = None;
         self.menu = Some(ActiveMenu {
             kind,
             options,
-            selected: 0,
+            selected,
         });
     }
 
@@ -144,6 +157,55 @@ impl App {
 
     pub(super) fn set_status(&mut self, kind: StatusKind, text: String) {
         self.status = Some(StatusLine { kind, text });
+    }
+}
+
+fn selected_for_menu(kind: MenuKind, options: &[MenuOption], current: Motion) -> usize {
+    if matches!(kind, MenuKind::Settings) {
+        options
+            .iter()
+            .position(|option| Motion::from_menu_id(&option.id) == Some(current))
+            .unwrap_or(0)
+    } else {
+        0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_menu_selects_current_motion_option() {
+        // label 不再携带选中标记；选中下标由 option id 反查当前 motion 决定。
+        let options = vec![
+            MenuOption {
+                id: "motion_full".into(),
+                label: "动画：完整".into(),
+            },
+            MenuOption {
+                id: "motion_reduced".into(),
+                label: "动画：减少".into(),
+            },
+            MenuOption {
+                id: "motion_off".into(),
+                label: "动画：关闭".into(),
+            },
+        ];
+
+        assert_eq!(
+            selected_for_menu(MenuKind::Settings, &options, Motion::Reduced),
+            1
+        );
+        assert_eq!(
+            selected_for_menu(MenuKind::Settings, &options, Motion::Off),
+            2
+        );
+        // 非设置菜单始终回到第 0 项。
+        assert_eq!(
+            selected_for_menu(MenuKind::Title, &options, Motion::Full),
+            0
+        );
     }
 }
 

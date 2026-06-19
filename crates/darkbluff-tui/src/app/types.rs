@@ -3,11 +3,76 @@
 use std::path::PathBuf;
 
 use darkbluff_core::engine::NoteView;
+use darkbluff_core::save::Motion;
 
 #[derive(Debug, Clone, Default)]
 pub struct TuiOptions {
     pub no_motion: bool,
     pub save_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectiveMotion {
+    Full,
+    Reduced,
+    Off,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AnimationView {
+    pub label: &'static str,
+    /// 0.0 起始，1.0 结束；视图层只用它决定提示强度。
+    pub progress: f32,
+}
+
+impl EffectiveMotion {
+    pub fn from_settings(motion: Motion, force_off: bool) -> Self {
+        if force_off {
+            return Self::Off;
+        }
+        match motion {
+            Motion::Full => Self::Full,
+            Motion::Reduced => Self::Reduced,
+            Motion::Off => Self::Off,
+        }
+    }
+
+    pub fn is_off(self) -> bool {
+        matches!(self, Self::Off)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_motion_flag_forces_effective_motion_off() {
+        assert_eq!(
+            EffectiveMotion::from_settings(Motion::Full, true),
+            EffectiveMotion::Off
+        );
+        assert_eq!(
+            EffectiveMotion::from_settings(Motion::Reduced, true),
+            EffectiveMotion::Off
+        );
+    }
+
+    #[test]
+    fn settings_motion_maps_when_not_forced() {
+        assert_eq!(
+            EffectiveMotion::from_settings(Motion::Full, false),
+            EffectiveMotion::Full
+        );
+        assert_eq!(
+            EffectiveMotion::from_settings(Motion::Reduced, false),
+            EffectiveMotion::Reduced
+        );
+        assert_eq!(
+            EffectiveMotion::from_settings(Motion::Off, false),
+            EffectiveMotion::Off
+        );
+    }
 }
 
 /// 右侧场景面板里单个 NPC 的展示数据。

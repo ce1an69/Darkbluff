@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::content::models::{parse_dialogue_source, Chapter};
+use crate::content::models::{Chapter, parse_dialogue_source};
 use crate::world::World;
 
 use super::Checker;
@@ -81,7 +81,11 @@ impl<'a> Checker<'a> {
         let Some(scene) = self.eng.get_scene(scene_id) else {
             return;
         };
-        for c in scene.connections.iter().chain(scene.one_way_connections.iter()) {
+        for c in scene
+            .connections
+            .iter()
+            .chain(scene.one_way_connections.iter())
+        {
             if !self.eng.scene_exists(c) {
                 self.err(format!("场景 {scene_id} 的连接引用了未定义的场景：{c}"));
             }
@@ -177,10 +181,18 @@ impl<'a> Checker<'a> {
                 self.err(format!("章节 {cid} 引用了未定义的场景：{s}"));
                 continue;
             }
-            if self.eng.get_scene_description(cid, s, World::Surface).is_none() {
+            if self
+                .eng
+                .get_scene_description(cid, s, World::Surface)
+                .is_none()
+            {
                 self.err(format!("章节 {cid} 场景 {s} 缺少 surface 描述"));
             }
-            if self.eng.get_scene_description(cid, s, World::Shadow).is_none() {
+            if self
+                .eng
+                .get_scene_description(cid, s, World::Shadow)
+                .is_none()
+            {
                 self.err(format!("章节 {cid} 场景 {s} 缺少 shadow 描述"));
             }
         }
@@ -208,7 +220,10 @@ impl<'a> Checker<'a> {
             let mut topic_seen: HashSet<String> = HashSet::new();
             for t in &cc.topics {
                 if !topic_seen.insert(t.id.clone()) {
-                    self.err(format!("章节 {cid} 角色 {} 的话题 id 重复：{}", cc.id, t.id));
+                    self.err(format!(
+                        "章节 {cid} 角色 {} 的话题 id 重复：{}",
+                        cc.id, t.id
+                    ));
                 }
                 if !self.eng.dialogue_topic_exists(cid, &cc.id, &t.id) {
                     self.err(format!(
@@ -216,8 +231,14 @@ impl<'a> Checker<'a> {
                         cc.id, t.id
                     ));
                 }
-                let has_surf = self.eng.get_dialogue(cid, &cc.id, &t.id, World::Surface).is_some();
-                let has_shadow = self.eng.get_dialogue(cid, &cc.id, &t.id, World::Shadow).is_some();
+                let has_surf = self
+                    .eng
+                    .get_dialogue(cid, &cc.id, &t.id, World::Surface)
+                    .is_some();
+                let has_shadow = self
+                    .eng
+                    .get_dialogue(cid, &cc.id, &t.id, World::Shadow)
+                    .is_some();
                 if has_shadow && !has_surf {
                     self.advice(format!(
                         "章节 {cid} 角色 {} 话题 {} 仅有影子版本，缺少表面对照",
@@ -299,7 +320,9 @@ impl<'a> Checker<'a> {
         match required {
             None => {}
             Some(req) if req.is_empty() => {
-                self.err(format!("章节 {cid} 的 required_judgments 显式为空数组（不合法）"));
+                self.err(format!(
+                    "章节 {cid} 的 required_judgments 显式为空数组（不合法）"
+                ));
             }
             Some(req) => {
                 let valid: HashSet<&str> = judgments.iter().map(|j| j.id.as_str()).collect();
@@ -336,7 +359,11 @@ impl<'a> Checker<'a> {
                     clue.id, cchar
                 ));
             }
-            if self.eng.get_dialogue(cid, cchar, ctopic, clue.world).is_none() {
+            if self
+                .eng
+                .get_dialogue(cid, cchar, ctopic, clue.world)
+                .is_none()
+            {
                 self.err(format!(
                     "章节 {cid} 线索 {} 的 world({}) 与对话 {}.{ctopic} 实际存在的世界不一致",
                     clue.id,

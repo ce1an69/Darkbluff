@@ -69,7 +69,9 @@ mod tests {
         assert_eq!(texts(&out), vec!["Title", "body", "• item"]);
         assert_eq!(
             out[0].style,
-            Style::default().fg(theme::LAVENDER).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(theme::LAVENDER)
+                .add_modifier(Modifier::BOLD)
         );
         assert_eq!(out[1].style, Style::default().fg(theme::TEXT));
         assert_eq!(out[2].style, Style::default().fg(theme::SUBTEXT0));

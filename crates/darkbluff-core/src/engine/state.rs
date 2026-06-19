@@ -8,12 +8,13 @@
 //! docs/save-system.md「自动保存时机」。一切外部输入的错误都转为可读 [`Outcome`]，**绝不 panic**。
 
 use crate::content::ContentEngine;
-use crate::engine::commands::{help_for, help_overview, parse, ParseOutcome};
+use crate::engine::commands::{ParseOutcome, help_for, help_overview, parse};
 use crate::engine::outcome::{
     ConfirmationAction, Input, MenuKind, Message, Outcome, Selection, SessionState,
 };
 use crate::save::Save;
 use crate::save::SaveStore;
+use crate::save::{Motion, Settings};
 
 use crate::engine::hints::Hints;
 
@@ -71,6 +72,7 @@ pub struct Session {
     pub(crate) engine: ContentEngine,
     pub(crate) store: SaveStore,
     pub(crate) save: Save,
+    pub(crate) settings: Settings,
     pub(crate) state: SessionState,
     pub(crate) pending: Pending,
     pub(crate) hints: Hints,
@@ -78,10 +80,12 @@ pub struct Session {
 
 impl Session {
     pub fn new(engine: ContentEngine, store: SaveStore) -> Self {
+        let settings = store.load_settings().unwrap_or_default();
         Self {
             engine,
             store,
             save: Save::default(),
+            settings,
             state: SessionState::Title,
             pending: Pending::default(),
             hints: Hints::default(),
@@ -93,6 +97,9 @@ impl Session {
     }
     pub fn save(&self) -> &Save {
         &self.save
+    }
+    pub fn settings(&self) -> &Settings {
+        &self.settings
     }
     pub fn state(&self) -> &SessionState {
         &self.state
@@ -149,6 +156,10 @@ impl Session {
             });
         }
         options.push(MenuOption {
+            id: "settings".into(),
+            label: "设置".into(),
+        });
+        options.push(MenuOption {
             id: "quit".into(),
             label: "退出".into(),
         });
@@ -164,8 +175,10 @@ impl Session {
 
     pub fn handle(&mut self, input: Input) -> Outcome {
         match (&self.state.clone(), input) {
-            // 强制退出：任意状态都走 do_quit（持久化 + QuitRequested），不绕过状态机。
-            (_, Input::Quit) => self.do_quit(),
+            // 强制退出（SIGTERM 等）：best-effort 持久化后无条件退出，必须先于 Quit。
+            (_, Input::ForceQuit) => self.do_quit(true),
+            // 退出（Ctrl+C 等）：持久化失败则留在游戏内提示。
+            (_, Input::Quit) => self.do_quit(false),
 
             (SessionState::ShowingIntro, Input::Ack)
             | (SessionState::ShowingIntro, Input::Cancel) => self.ack_intro(),
@@ -184,7 +197,7 @@ impl Session {
             }
             (SessionState::Ending, _) => Outcome::Ignored,
 
-            // 标题界面：新游戏 / 继续 / 退出
+            // 标题界面：新游戏 / 继续 / 设置 / 退出
             (SessionState::Title, Input::Select(selection)) => self.select_from_title(selection),
             (SessionState::Title, _) => {
                 if !self.has_pending_menu() {
@@ -193,6 +206,11 @@ impl Session {
                     Outcome::Ignored
                 }
             }
+
+            (SessionState::ChoosingSettings, Input::Select(selection)) => {
+                self.select_setting(selection)
+            }
+            (SessionState::ChoosingSettings, Input::Cancel) => self.enter_title(),
 
             (SessionState::Confirming, Input::Confirm(confirmed)) => self.handle_confirm(confirmed),
             (SessionState::Confirming, Input::Cancel) => self.handle_confirm(false),
@@ -237,7 +255,7 @@ impl Session {
 
     // ----- 由 handle 抽出的具体状态转换（每条一个语义动作） -----
 
-    /// 标题界面选择：新游戏 / 继续 / 退出。
+    /// 标题界面选择：新游戏 / 继续 / 设置 / 退出。
     fn select_from_title(&mut self, selection: Selection) -> Outcome {
         if !self.has_pending_menu() {
             return self.enter_title();
@@ -245,9 +263,50 @@ impl Session {
         match self.selection_id(&selection).as_deref() {
             Some("new_game") => self.begin_new_game(),
             Some("continue") => self.load_and_continue(),
-            Some("quit") => self.do_quit(),
+            Some("settings") => self.show_settings(),
+            Some("quit") => self.do_quit(false),
             _ => self.enter_title(),
         }
+    }
+
+    fn show_settings(&mut self) -> Outcome {
+        let options = self.motion_options();
+        self.set_menu(MenuKind::Settings, options.clone());
+        self.state = SessionState::ChoosingSettings;
+        Outcome::MenuRequested {
+            kind: MenuKind::Settings,
+            prompt: "设置".into(),
+            options,
+        }
+    }
+
+    fn motion_options(&self) -> Vec<MenuOption> {
+        // 选中态由渲染层根据当前 motion 回查 id 决定（见 selected_for_menu），
+        // 不再把展示字形写进 label。
+        [Motion::Full, Motion::Reduced, Motion::Off]
+            .into_iter()
+            .map(|motion| MenuOption {
+                id: motion.menu_id().into(),
+                label: motion.zh_label().into(),
+            })
+            .collect()
+    }
+
+    fn select_setting(&mut self, selection: Selection) -> Outcome {
+        let Some(id) = self.selection_id(&selection) else {
+            return Outcome::Message(Message::error(vec!["无效选择。".into()]));
+        };
+        let Some(motion) = Motion::from_menu_id(&id) else {
+            return Outcome::Message(Message::error(vec!["无效设置。".into()]));
+        };
+        // 先落盘，成功后再改内存：失败时内存/磁盘/菜单三者都停在旧值。
+        let mut next = self.settings.clone();
+        next.motion = motion;
+        if let Err(e) = self.store.save_settings(&next) {
+            return Outcome::Message(Message::error(vec![format!("设置保存失败：{e}")]));
+        }
+        self.settings = next;
+        self.show_settings()
     }
 
     /// 「新游戏」：已有存档则请求二次确认，否则直接开始。
@@ -412,7 +471,7 @@ impl Session {
                 Map => self.do_map(),
                 Note => self.do_note(),
                 Help { cmd } => Self::do_help(cmd),
-                Quit => self.do_quit(),
+                Quit => self.do_quit(false),
             },
         }
     }

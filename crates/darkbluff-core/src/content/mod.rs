@@ -10,9 +10,12 @@ pub mod engine;
 pub mod loader;
 pub mod models;
 
-pub use checker::{check, CheckReport, Issue, Severity};
+pub use checker::{CheckReport, Issue, Severity, check};
 pub use condition::{eval, topic_visible};
 pub use dialogue::DialogueBook;
 pub use engine::{ChapterMeta, ContentEngine};
-pub use loader::{parse_scene_override_name, strip_md_ext, strip_yaml_ext, DataSource, FilesystemSource, InMemorySource};
+pub use loader::{
+    DataSource, FilesystemSource, InMemorySource, parse_scene_override_name, strip_md_ext,
+    strip_yaml_ext,
+};
 pub use models::*;

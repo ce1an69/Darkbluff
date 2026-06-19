@@ -4,7 +4,7 @@
 //! 后续结构升级时在此按 version 递增执行迁移函数，并提升 [`CURRENT_VERSION`]。
 
 use crate::error::Result;
-use crate::save::schema::{Save, CURRENT_VERSION};
+use crate::save::schema::{CURRENT_VERSION, Save};
 
 /// 对加载后的存档执行版本迁移，最终对齐到 [`CURRENT_VERSION`]。
 ///

@@ -10,7 +10,11 @@ mod types;
 pub use self::types::*;
 
 use std::collections::VecDeque;
-use std::time::Duration;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use darkbluff_core::engine::{
@@ -19,17 +23,21 @@ use darkbluff_core::engine::{
 use darkbluff_core::error::Result;
 use ratatui::style::{Modifier, Style};
 
+use self::suggest::strip_slash;
 use crate::input::CommandInput;
 use crate::markdown::StyledLine;
-use self::suggest::strip_slash;
 use crate::terminal::TerminalGuard;
 use crate::theme;
 use crate::view::{self, ViewState};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(120);
+const ANIMATION_TICK: Duration = Duration::from_millis(33);
+const FULL_ANIMATION: Duration = Duration::from_millis(240);
+const REDUCED_ANIMATION: Duration = Duration::from_millis(90);
 
 pub struct App {
     pub(super) session: Session,
+    terminate: Arc<AtomicBool>,
     pub(super) running: bool,
     pub(super) input: CommandInput,
     /// 对话/剧情转录（markdown 渲染后的带样式行）。系统提示不入此列。
@@ -40,7 +48,9 @@ pub struct App {
     pub(super) suggestions: Option<Suggestions>,
     pub(super) note_panel: Option<NotePanel>,
     pub(super) notice: Option<Notice>,
-    pub(super) no_motion: bool,
+    pub(super) force_no_motion: bool,
+    pub(super) motion: EffectiveMotion,
+    pub(super) animation: Option<Animation>,
     pub(super) cached_title: String,
     pub(super) cached_scene_name: String,
     pub(super) cached_scene_text: String,
@@ -57,9 +67,11 @@ pub(super) struct ActiveMenu {
 }
 
 impl App {
-    pub fn new(session: Session, no_motion: bool) -> Self {
+    pub fn new(session: Session, no_motion: bool, terminate: Arc<AtomicBool>) -> Self {
+        let motion = EffectiveMotion::from_settings(session.settings().motion, no_motion);
         Self {
             session,
+            terminate,
             running: true,
             input: CommandInput::default(),
             transcript: VecDeque::new(),
@@ -69,7 +81,9 @@ impl App {
             suggestions: None,
             note_panel: None,
             notice: None,
-            no_motion,
+            force_no_motion: no_motion,
+            motion,
+            animation: None,
             cached_title: String::new(),
             cached_scene_name: String::new(),
             cached_scene_text: String::new(),
@@ -84,6 +98,10 @@ impl App {
         self.dispatch(Input::Cancel);
 
         while self.running {
+            if self.terminate.swap(false, Ordering::Relaxed) {
+                self.dispatch(Input::ForceQuit);
+                continue;
+            }
             if self.dirty {
                 terminal.terminal().draw(|frame| {
                     let state = self.view_state();
@@ -91,7 +109,13 @@ impl App {
                 })?;
                 self.dirty = false;
             }
-            if event::poll(POLL_INTERVAL)? {
+            self.update_animation();
+            let poll_interval = if self.animation.is_some() {
+                ANIMATION_TICK
+            } else {
+                POLL_INTERVAL
+            };
+            if event::poll(poll_interval)? {
                 match event::read()? {
                     Event::Key(key) if key.kind == KeyEventKind::Press => {
                         self.dirty = true;
@@ -103,6 +127,15 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    fn update_animation(&mut self) {
+        if self.animation.as_ref().is_some_and(|a| a.done()) {
+            self.animation = None;
+            self.dirty = true;
+        } else if self.animation.is_some() {
+            self.dirty = true;
+        }
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
@@ -120,6 +153,7 @@ impl App {
         }
         match self.session.state() {
             SessionState::Title
+            | SessionState::ChoosingSettings
             | SessionState::ChoosingAskCharacter
             | SessionState::ChoosingAskTopic
             | SessionState::ChoosingJudgeCharacter
@@ -225,8 +259,12 @@ impl App {
             KeyCode::Down if palette_open => self.move_suggest(1),
             KeyCode::Tab if palette_open => self.complete_suggestion(),
             KeyCode::Enter => self.submit_command(),
-            KeyCode::Backspace | KeyCode::Delete | KeyCode::Left | KeyCode::Right
-            | KeyCode::Home | KeyCode::End => self.apply_edit(key.code),
+            KeyCode::Backspace
+            | KeyCode::Delete
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Home
+            | KeyCode::End => self.apply_edit(key.code),
             KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.input.insert(c);
                 self.recompute_suggestions();
@@ -251,7 +289,9 @@ impl App {
         if !cmd.trim().is_empty() {
             self.push_line(
                 format!("> {}", cmd.trim()),
-                Style::default().fg(theme::OVERLAY1).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(theme::OVERLAY1)
+                    .add_modifier(Modifier::DIM),
             );
         }
         self.dispatch(Input::Text(cmd));
@@ -273,10 +313,64 @@ impl App {
 
     fn dispatch(&mut self, input: Input) {
         self.suggestions = None;
+        let before_scene = self.session.save().current_scene.clone();
+        let before_world = self.session.save().current_world;
+        let before_chapter = self.session.save().current_chapter.clone();
         let outcome = self.session.handle(input);
+        self.start_animation_for(&outcome, &before_chapter, &before_scene, before_world);
         self.process_outcome(outcome);
+        self.refresh_motion();
         self.refresh_scene();
         self.dirty = true;
+    }
+
+    fn start_animation_for(
+        &mut self,
+        outcome: &darkbluff_core::engine::Outcome,
+        before_chapter: &str,
+        before_scene: &str,
+        before_world: darkbluff_core::world::World,
+    ) {
+        let save = self.session.save();
+        let label = match outcome {
+            darkbluff_core::engine::Outcome::ChapterIntro { .. } => Some("Chapter"),
+            darkbluff_core::engine::Outcome::ChapterOutro { .. }
+            | darkbluff_core::engine::Outcome::EndingReached { .. } => Some("Ending"),
+            darkbluff_core::engine::Outcome::Narrative { .. } => Some("Voice"),
+            // 仅在「已在章节内」时才用存档 diff 兜底；Title 态 before_chapter 为空
+            //（继续/新游戏前的默认存档），避免读档/开局误触发移动动画。
+            _ if !before_chapter.is_empty() && save.current_chapter != before_chapter => {
+                Some("Chapter")
+            }
+            _ if !before_chapter.is_empty() && save.current_world != before_world => {
+                Some("Gaze")
+            }
+            _ if !before_chapter.is_empty() && save.current_scene != before_scene => {
+                Some("Move")
+            }
+            _ => None,
+        };
+        if let Some(label) = label {
+            self.start_animation(label);
+        }
+    }
+
+    fn start_animation(&mut self, label: &'static str) {
+        let duration = match self.motion {
+            EffectiveMotion::Full => FULL_ANIMATION,
+            EffectiveMotion::Reduced => REDUCED_ANIMATION,
+            EffectiveMotion::Off => return,
+        };
+        self.animation = Some(Animation {
+            label,
+            started: Instant::now(),
+            duration,
+        });
+    }
+
+    fn refresh_motion(&mut self) {
+        self.motion =
+            EffectiveMotion::from_settings(self.session.settings().motion, self.force_no_motion);
     }
 
     /// 仅在 dispatch 后刷新：缓存场景标题/名称/描述与在场 NPC，供视图层读取。
@@ -337,8 +431,12 @@ impl App {
         let save = self.session.save();
         let engine = self.session.engine();
         let current = &save.current_chapter;
-        let reached: std::collections::HashSet<&str> =
-            save.discovered.chapters.iter().map(|s| s.as_str()).collect();
+        let reached: std::collections::HashSet<&str> = save
+            .discovered
+            .chapters
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
         save.discovered
             .chapters
             .iter()
@@ -410,7 +508,10 @@ impl App {
             world: save.current_world,
             scene_text: &self.cached_scene_text,
             npcs: &self.cached_npcs,
-            endings: (save.discovered.endings.len(), engine.ending_chapter_ids().len()),
+            endings: (
+                save.discovered.endings.len(),
+                engine.ending_chapter_ids().len(),
+            ),
             state,
             input: &self.input,
             transcript: &self.transcript,
@@ -437,7 +538,30 @@ impl App {
             } else {
                 None
             },
-            no_motion: self.no_motion,
+            no_motion: self.motion.is_off(),
+            animation: self.animation.as_ref().map(Animation::view),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct Animation {
+    label: &'static str,
+    started: Instant,
+    duration: Duration,
+}
+
+impl Animation {
+    fn done(&self) -> bool {
+        self.started.elapsed() >= self.duration
+    }
+
+    fn view(&self) -> AnimationView {
+        let elapsed = self.started.elapsed().as_secs_f32();
+        let total = self.duration.as_secs_f32().max(f32::EPSILON);
+        AnimationView {
+            label: self.label,
+            progress: (elapsed / total).clamp(0.0, 1.0),
         }
     }
 }
@@ -447,6 +571,7 @@ fn is_menu_state(state: &SessionState) -> bool {
     matches!(
         state,
         SessionState::Title
+            | SessionState::ChoosingSettings
             | SessionState::ChoosingAskCharacter
             | SessionState::ChoosingAskTopic
             | SessionState::ChoosingJudgeCharacter

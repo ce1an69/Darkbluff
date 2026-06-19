@@ -32,7 +32,10 @@ pub fn topic_visible(topic: &Topic, facts: &HashSet<String>) -> bool {
     if topic.available {
         true
     } else {
-        topic.unlock_after.as_ref().map_or(false, |c| eval(c, facts))
+        topic
+            .unlock_after
+            .as_ref()
+            .map_or(false, |c| eval(c, facts))
     }
 }
 

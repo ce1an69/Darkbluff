@@ -4,8 +4,8 @@
 //!   当前上下文下的 (id, label) 候选（只读）。设计见 docs/commands.md「输入辅助」。
 //! - `reconcile_save`：继续游戏时校正存档中失效的内容引用（会修改存档并返回 warning）。
 
-use crate::content::condition::topic_visible;
 use crate::content::ContentEngine;
+use crate::content::condition::topic_visible;
 use crate::engine::condition::build_factset;
 use crate::save::Save;
 use crate::world::World;
@@ -28,8 +28,7 @@ pub fn reconcile_save(save: &mut Save, engine: &ContentEngine) -> Vec<String> {
 
     // chapter_path：保留存在的章节，保持顺序
     let original_path = save.chapter_path.clone();
-    save.chapter_path
-        .retain(|c| engine.chapter_exists(c));
+    save.chapter_path.retain(|c| engine.chapter_exists(c));
     if save.chapter_path != original_path {
         warnings.push("部分已访问的章节因内容更新而失效，已忽略。".into());
     }
