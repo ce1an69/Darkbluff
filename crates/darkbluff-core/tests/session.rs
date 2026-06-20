@@ -89,25 +89,29 @@ fn new_game_shows_intro_then_exploring() {
 }
 
 #[test]
-fn title_settings_persist_motion_and_return_to_title() {
+fn title_settings_cycle_motion_and_return_to_title() {
     let mut s = build_session();
     s.handle(Input::Cancel); // enter title
     match s.handle(Input::Select(Selection::Id("settings".into()))) {
         Outcome::MenuRequested { kind, options, .. } => {
             assert_eq!(kind, darkbluff_core::engine::MenuKind::Settings);
-            assert!(options.iter().any(|o| o.id == "motion_off"));
+            // 维度行：id 为 "motion"，label 含当前值（默认完整）。
+            assert!(options.iter().any(|o| o.id == "motion"));
+            assert!(options.iter().any(|o| o.label.contains("完整")));
         }
         o => panic!("expected settings menu, got {:?}", o),
     }
     assert_eq!(*s.state(), SessionState::ChoosingSettings);
-    match s.handle(Input::Select(Selection::Id("motion_off".into()))) {
+    // Enter（Select）等价于 cycle +1：Full → Reduced，并重建菜单。
+    match s.handle(Input::Select(Selection::Id("motion".into()))) {
         Outcome::MenuRequested { options, .. } => {
-            // label 不再承载选中标记；仅确认菜单已重建且仍含 motion_off 项。
-            assert!(options.iter().any(|o| o.id == "motion_off"));
-            assert!(options.iter().all(|o| !o.label.contains('✓')));
+            assert!(options.iter().any(|o| o.label.contains("减少")));
         }
         o => panic!("expected refreshed settings menu, got {:?}", o),
     }
+    assert_eq!(s.settings().motion, Motion::Reduced);
+    // 再 cycle +1：Reduced → Off。
+    s.handle(Input::Cycle(Selection::Id("motion".into()), 1));
     assert_eq!(s.settings().motion, Motion::Off);
     s.handle(Input::Cancel);
     assert_eq!(*s.state(), SessionState::Title);
@@ -359,7 +363,7 @@ fn select_setting_rolls_back_on_save_failure() {
     if !lock_dir_readonly(&dir) {
         return;
     }
-    match s.handle(Input::Select(Selection::Id("motion_off".into()))) {
+    match s.handle(Input::Cycle(Selection::Id("motion".into()), 1)) {
         Outcome::Message(_) => {}
         o => panic!("expected error message on settings save failure, got {o:?}"),
     }

@@ -1,9 +1,6 @@
 //! 标题态整页首页：双色块状 logo + 菜单，垂直居中。
 
-use std::borrow::Cow;
-
 use darkbluff_core::engine::MenuOption;
-use darkbluff_core::save::Motion;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -57,11 +54,7 @@ fn render_menu(frame: &mut Frame, area: Rect, mut y: u16, options: &[MenuOption]
             Style::default().fg(theme::TEXT)
         };
         let marker = if sel { "▶ " } else { "  " };
-        let line = Line::from(format!(
-            "{marker}{}",
-            title_option_label(&opt.id, &opt.label)
-        ))
-        .style(style);
+        let line = Line::from(format!("{marker}{}", opt.label)).style(style);
         render_centered(frame, area, y, line);
         y += 1;
     }
@@ -77,21 +70,6 @@ fn logo_line(row: &str) -> Line<'static> {
     ])
 }
 
-/// 标题菜单项英文标签（按引擎 option id 映射；motion 项复用 `Motion::en_label`，
-/// 未知 id 回退原标签）。返回 `Cow` 使已知映射零分配。
-fn title_option_label<'a>(id: &str, label: &'a str) -> Cow<'a, str> {
-    match id {
-        "new_game" => Cow::Borrowed("New Game"),
-        "continue" => Cow::Borrowed("Continue"),
-        "settings" => Cow::Borrowed("Settings"),
-        "quit" => Cow::Borrowed("Quit"),
-        _ => match Motion::from_menu_id(id) {
-            Some(motion) => Cow::Borrowed(motion.en_label()),
-            None => Cow::Borrowed(label),
-        },
-    }
-}
-
 fn render_centered(frame: &mut Frame, area: Rect, y: u16, line: Line<'_>) {
     let w = line.width() as u16;
     let x = area.x + area.width.saturating_sub(w) / 2;
@@ -104,29 +82,4 @@ fn render_centered(frame: &mut Frame, area: Rect, y: u16, line: Line<'_>) {
             height: 1,
         },
     );
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn maps_known_title_option_ids_to_english() {
-        assert_eq!(title_option_label("new_game", "新游戏"), "New Game");
-        assert_eq!(title_option_label("continue", "继续"), "Continue");
-        assert_eq!(title_option_label("settings", "设置"), "Settings");
-        // motion 项由 id 经 Motion::en_label 映射，label 内容不再参与。
-        assert_eq!(title_option_label("motion_full", "动画：完整"), "Motion: Full");
-        assert_eq!(
-            title_option_label("motion_reduced", "动画：减少"),
-            "Motion: Reduced"
-        );
-        assert_eq!(title_option_label("motion_off", "动画：关闭"), "Motion: Off");
-        assert_eq!(title_option_label("quit", "退出"), "Quit");
-    }
-
-    #[test]
-    fn falls_back_to_label_for_unknown_id() {
-        assert_eq!(title_option_label("settings", "Settings"), "Settings");
-    }
 }

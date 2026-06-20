@@ -253,6 +253,9 @@ impl App {
             }
             KeyCode::Up | KeyCode::Char('k') => self.move_menu(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_menu(1),
+            // 设置菜单：左右（或 h/l）循环切换当前维度行的取值。
+            KeyCode::Left | KeyCode::Char('h') => self.cycle_setting_key(-1),
+            KeyCode::Right | KeyCode::Char('l') => self.cycle_setting_key(1),
             KeyCode::Enter => {
                 if let Some(menu) = &self.menu {
                     let selected = menu.selected;
@@ -278,6 +281,16 @@ impl App {
             if len > 0 {
                 menu.selected = (menu.selected as i32 + delta).rem_euclid(len as i32) as usize;
             }
+        }
+    }
+
+    /// 设置菜单专用：对当前光标维度行发 Cycle；非 Settings 菜单忽略（保持原忽略行为）。
+    fn cycle_setting_key(&mut self, delta: i32) {
+        if let Some(menu) = &self.menu
+            && matches!(menu.kind, MenuKind::Settings)
+        {
+            let dim = menu.options[menu.selected].id.clone();
+            self.dispatch(Input::Cycle(Selection::Id(dim), delta));
         }
     }
 

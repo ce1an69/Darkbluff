@@ -158,7 +158,7 @@ darkbluff --data-dir <path>      # 指定内容数据目录（当前开发模式
 | 状态 | 说明 |
 |------|------|
 | `Title` | 标题菜单（新游戏 / 继续 / 设置 / 退出） |
-| `ChoosingSettings` | 标题界面的设置菜单，当前用于选择 motion：full / reduced / off |
+| `ChoosingSettings` | 标题界面的设置菜单：每行一个设置维度（当前仅「动画」），上下选维度、左右/Enter 循环切换取值 |
 | `ShowingIntro` | 章节开场/过场文本（`intro`）展示中，玩家确认后进入 `Exploring`；无 `intro` 则跳过 |
 | `ShowingNarrative` | 叙事触发器（心声 / 碎片 / 旁白）展示中，玩家确认后继续 drain 下一个，或回到 `Exploring` / 执行被推迟的章节推进 |
 | `Exploring` | 章节内自由探索（ask / move / gaze / map / note / help / quit 可用） |

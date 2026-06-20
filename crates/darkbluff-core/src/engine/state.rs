@@ -208,7 +208,11 @@ impl Session {
             }
 
             (SessionState::ChoosingSettings, Input::Select(selection)) => {
-                self.select_setting(selection)
+                // Enter = 对当前维度切到下一个值（单键友好）。
+                self.cycle_setting(selection, 1)
+            }
+            (SessionState::ChoosingSettings, Input::Cycle(selection, delta)) => {
+                self.cycle_setting(selection, delta)
             }
             (SessionState::ChoosingSettings, Input::Cancel) => self.enter_title(),
 
@@ -248,7 +252,8 @@ impl Session {
             (_, Input::Select(_))
             | (_, Input::Cancel)
             | (_, Input::Confirm(_))
-            | (_, Input::Ack) => Outcome::Ignored,
+            | (_, Input::Ack)
+            | (_, Input::Cycle(_, _)) => Outcome::Ignored,
             (_, Input::Text(_)) => Outcome::Ignored,
         }
     }
@@ -270,7 +275,7 @@ impl Session {
     }
 
     fn show_settings(&mut self) -> Outcome {
-        let options = self.motion_options();
+        let options = self.setting_options();
         self.set_menu(MenuKind::Settings, options.clone());
         self.state = SessionState::ChoosingSettings;
         Outcome::MenuRequested {
@@ -280,28 +285,26 @@ impl Session {
         }
     }
 
-    fn motion_options(&self) -> Vec<MenuOption> {
-        // 选中态由渲染层根据当前 motion 回查 id 决定（见 selected_for_menu），
-        // 不再把展示字形写进 label。
-        [Motion::Full, Motion::Reduced, Motion::Off]
-            .into_iter()
-            .map(|motion| MenuOption {
-                id: motion.menu_id().into(),
-                label: motion.zh_label().into(),
-            })
-            .collect()
+    /// 设置菜单的维度行：每行一个维度，label 含当前取值。
+    /// 加新维度时在此追加一行，并在 [`cycle_setting`] 加对应分支。
+    fn setting_options(&self) -> Vec<MenuOption> {
+        vec![MenuOption {
+            id: Motion::DIMENSION_ID.into(),
+            label: format!("动画：{}", self.settings.motion.zh_label()),
+        }]
     }
 
-    fn select_setting(&mut self, selection: Selection) -> Outcome {
+    /// 循环切换 `selection` 所指维度的取值：先落盘成功后再改内存，
+    /// 失败时内存/磁盘/菜单三者都停在旧值。
+    fn cycle_setting(&mut self, selection: Selection, delta: i32) -> Outcome {
         let Some(id) = self.selection_id(&selection) else {
             return Outcome::Message(Message::error(vec!["无效选择。".into()]));
         };
-        let Some(motion) = Motion::from_menu_id(&id) else {
-            return Outcome::Message(Message::error(vec!["无效设置。".into()]));
-        };
-        // 先落盘，成功后再改内存：失败时内存/磁盘/菜单三者都停在旧值。
         let mut next = self.settings.clone();
-        next.motion = motion;
+        match id.as_str() {
+            Motion::DIMENSION_ID => next.motion = next.motion.cycle(delta),
+            _ => return Outcome::Message(Message::error(vec!["未知设置项。".into()])),
+        }
         if let Err(e) = self.store.save_settings(&next) {
             return Outcome::Message(Message::error(vec![format!("设置保存失败：{e}")]));
         }

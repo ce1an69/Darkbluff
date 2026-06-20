@@ -293,31 +293,22 @@ fn renders_home_screen() {
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| draw(f, &vs)).unwrap();
     let text = buffer_text(term.backend().buffer());
-    for needle in ["New Game", "Quit"] {
+    for needle in ["新游戏", "退出"] {
         assert!(text.contains(needle), "home missing {needle:?}:\n{text}");
     }
 }
 
 #[test]
-fn renders_settings_current_motion_marker() {
-    let options = vec![
-        MenuOption {
-            id: "motion_full".into(),
-            label: "动画：完整".into(),
-        },
-        MenuOption {
-            id: "motion_reduced".into(),
-            label: "动画：减少".into(),
-        },
-        MenuOption {
-            id: "motion_off".into(),
-            label: "动画：关闭".into(),
-        },
-    ];
+fn renders_settings_current_value() {
+    // 设置菜单为维度行：单行 id="motion"，label 含当前值（由 core 拼装）。
+    let options = vec![MenuOption {
+        id: "motion".into(),
+        label: "动画：减少".into(),
+    }];
     let menu = MenuView {
         kind: MenuKind::Settings,
         options: &options,
-        selected: 1,
+        selected: 0,
     };
     let input = CommandInput::default();
     let state = SessionState::ChoosingSettings;
@@ -349,8 +340,8 @@ fn renders_settings_current_motion_marker() {
     let text = buffer_text(term.backend().buffer());
 
     assert!(
-        text.contains("Motion: Reduced"),
-        "settings marker missing:\n{text}"
+        text.contains("动画：减少"),
+        "settings current value missing:\n{text}"
     );
 }
 

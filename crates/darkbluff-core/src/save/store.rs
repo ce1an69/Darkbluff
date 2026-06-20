@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::Result;
-use crate::save::atomic::{backup_then_atomic_write, bak_path, corrupt_path};
+use crate::save::atomic::{atomic_write_bytes_nofsync, backup_then_atomic_write, bak_path, corrupt_path};
 use crate::save::clock::Clock;
 use crate::save::migration::migrate;
 use crate::save::schema::{CURRENT_VERSION, Save, Settings};
@@ -181,10 +181,14 @@ impl SaveStore {
         Ok(Settings::default())
     }
 
-    /// 原子保存设置。
+    /// 原子保存设置（无 fsync 轻量写）。
+    ///
+    /// 动画偏好无需存档级崩溃持久化保证：省去 `sync_all` 后，崩溃最坏丢失最近一次改动，
+    /// 由 [`load_settings`] 的 fallback 默认值兜底；避免设置菜单每次按键（左/右/Enter
+    /// 循环切换）都触发一次磁盘 fsync。存档仍走强持久化路径，不受影响。
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(settings)?;
-        backup_then_atomic_write(&self.settings_path, &bytes)
+        atomic_write_bytes_nofsync(&self.settings_path, &bytes)
     }
 }
 

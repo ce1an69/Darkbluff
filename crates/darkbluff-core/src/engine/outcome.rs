@@ -189,6 +189,9 @@ pub enum Input {
     Text(String),
     /// 菜单选择。
     Select(Selection),
+    /// 设置项循环切换取值（仅 ChoosingSettings）：`Selection` 标识维度，
+    /// `i32` 为方向（-1=上一个值，+1=下一个值）。
+    Cycle(Selection, i32),
     /// 取消（Esc）。
     Cancel,
     /// 二次确认（true=确认）。

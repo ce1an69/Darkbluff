@@ -278,40 +278,27 @@ pub enum Motion {
 }
 
 impl Motion {
-    /// 设置菜单 option id（唯一来源，供引擎构建菜单与渲染层回查）。
-    pub fn menu_id(self) -> &'static str {
-        match self {
-            Motion::Full => "motion_full",
-            Motion::Reduced => "motion_reduced",
-            Motion::Off => "motion_off",
-        }
+    /// 设置菜单里该维度的行 id（唯一来源；TUI 据此发 `Input::Cycle`）。
+    pub const DIMENSION_ID: &'static str = "motion";
+
+    /// 取值的有序列表（菜单循环切换顺序）。
+    pub fn values() -> [Motion; 3] {
+        [Motion::Full, Motion::Reduced, Motion::Off]
     }
 
-    /// 由设置菜单 option id 反查 Motion。
-    pub fn from_menu_id(id: &str) -> Option<Motion> {
-        match id {
-            "motion_full" => Some(Motion::Full),
-            "motion_reduced" => Some(Motion::Reduced),
-            "motion_off" => Some(Motion::Off),
-            _ => None,
-        }
+    /// 在取值列表里按 `delta` 循环（正负均可，环形）。
+    pub fn cycle(self, delta: i32) -> Motion {
+        let values = Self::values();
+        let idx = values.iter().position(|&m| m == self).unwrap_or(0) as i32;
+        values[(idx + delta).rem_euclid(values.len() as i32) as usize]
     }
 
-    /// 中文标签（数据语言；随存档/设置面向玩家）。
+    /// 取值的中文标签（纯值，不含维度名；维度名由设置菜单拼装）。
     pub fn zh_label(self) -> &'static str {
         match self {
-            Motion::Full => "动画：完整",
-            Motion::Reduced => "动画：减少",
-            Motion::Off => "动画：关闭",
-        }
-    }
-
-    /// 英文标签（界面 chrome 语言）。
-    pub fn en_label(self) -> &'static str {
-        match self {
-            Motion::Full => "Motion: Full",
-            Motion::Reduced => "Motion: Reduced",
-            Motion::Off => "Motion: Off",
+            Motion::Full => "完整",
+            Motion::Reduced => "减少",
+            Motion::Off => "关闭",
         }
     }
 }
@@ -429,16 +416,23 @@ mod tests {
     }
 
     #[test]
-    fn motion_menu_id_roundtrip() {
-        for motion in [Motion::Full, Motion::Reduced, Motion::Off] {
-            assert_eq!(Motion::from_menu_id(motion.menu_id()), Some(motion));
-        }
-        // menu_id ↔ zh_label ↔ en_label 三者一一对应、互不串味。
-        assert_eq!(Motion::Full.menu_id(), "motion_full");
-        assert_eq!(Motion::Reduced.menu_id(), "motion_reduced");
-        assert_eq!(Motion::Off.menu_id(), "motion_off");
-        assert_eq!(Motion::Full.en_label(), "Motion: Full");
-        assert_eq!(Motion::Off.zh_label(), "动画：关闭");
-        assert_eq!(Motion::from_menu_id("bogus"), None);
+    fn motion_cycle_wraps() {
+        // 正向：Full → Reduced → Off → Full
+        assert_eq!(Motion::Full.cycle(1), Motion::Reduced);
+        assert_eq!(Motion::Reduced.cycle(1), Motion::Off);
+        assert_eq!(Motion::Off.cycle(1), Motion::Full);
+        // 反向：Full → Off → Reduced → Full
+        assert_eq!(Motion::Full.cycle(-1), Motion::Off);
+        assert_eq!(Motion::Off.cycle(-1), Motion::Reduced);
+        assert_eq!(Motion::Reduced.cycle(-1), Motion::Full);
+        // 大步取模
+        assert_eq!(Motion::Full.cycle(3), Motion::Full);
+        assert_eq!(Motion::Full.cycle(4), Motion::Reduced);
+        // values 顺序与纯值标签
+        assert_eq!(Motion::values(), [Motion::Full, Motion::Reduced, Motion::Off]);
+        assert_eq!(Motion::DIMENSION_ID, "motion");
+        assert_eq!(Motion::Full.zh_label(), "完整");
+        assert_eq!(Motion::Reduced.zh_label(), "减少");
+        assert_eq!(Motion::Off.zh_label(), "关闭");
     }
 }

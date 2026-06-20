@@ -47,6 +47,19 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// 原子写入字节（无 fsync）：写 `.tmp` → rename 覆盖目标。
+/// 供持久化要求弱、写入频率高的数据（如设置）使用：省去 `sync_all`，崩溃最坏
+/// 丢失最近一次改动，由加载侧 fallback 兜底；rename 仍保证不会写出半截文件。
+pub fn atomic_write_bytes_nofsync(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp = tmp_path(path);
+    {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+    }
+    fs::rename(&tmp, path)?;
+    Ok(())
+}
+
 /// 若目标文件存在，将其复制为 `.bak`（覆盖旧备份）。不存在则无操作。
 pub fn backup_if_exists(path: &Path) -> Result<()> {
     if path.exists() {
