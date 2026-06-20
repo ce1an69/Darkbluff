@@ -27,6 +27,7 @@ use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::terminal::TerminalGuard;
 use crate::view::{self, ViewState};
+use unicode_width::UnicodeWidthStr;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(120);
 const ANIMATION_TICK: Duration = Duration::from_millis(33);
@@ -48,6 +49,12 @@ pub struct App {
     pub(super) force_no_motion: bool,
     pub(super) motion: EffectiveMotion,
     pub(super) animation: Option<Animation>,
+    /// 打字机：剧情类文本逐字揭示（motion=Off 时不启动）。
+    pub(super) typewriter: Option<Typewriter>,
+    /// 本次 dispatch 待传 skip（apply_* 填入，process_outcome 取用后归零）。
+    pending_tw_skip: usize,
+    /// transcript 累计 push 次数（不受 MAX_TRANSCRIPT FIFO 封顶影响），用于度量单次 dispatch 新增行数。
+    pub(super) transcript_pushes: usize,
     pub(super) cached_title: String,
     pub(super) cached_scene_name: String,
     pub(super) cached_scene_text: String,
@@ -80,6 +87,9 @@ impl App {
             force_no_motion: no_motion,
             motion,
             animation: None,
+            typewriter: None,
+            pending_tw_skip: 0,
+            transcript_pushes: 0,
             cached_title: String::new(),
             cached_scene_name: String::new(),
             cached_scene_text: String::new(),
@@ -106,7 +116,10 @@ impl App {
                 self.dirty = false;
             }
             self.update_animation();
-            let poll_interval = if self.animation.is_some() {
+            self.update_typewriter();
+            let poll_interval = if self.animation.is_some()
+                || self.typewriter.as_ref().is_some_and(|t| t.is_active())
+            {
                 ANIMATION_TICK
             } else {
                 POLL_INTERVAL
@@ -134,9 +147,74 @@ impl App {
         }
     }
 
+    /// 推进打字机揭示宽度（每 ANIMATION_TICK 一次）；完成后清除。
+    fn update_typewriter(&mut self) {
+        let Some(tw) = self.typewriter.as_mut() else {
+            return;
+        };
+        // Off 中途到达（设置切换）：立即完成，避免 step 加法溢出 / 卡死。
+        if self.motion.is_off() {
+            self.typewriter = None;
+            self.dirty = true;
+            return;
+        }
+        // 速度：目标列/秒，按 ANIMATION_TICK(33ms) 折算为每 tick 列数。
+        //   Full ≈ 30 列/秒 → 1 列/tick；Reduced ≈ 90 列/秒 → 3 列/tick。
+        let step = match self.motion {
+            EffectiveMotion::Full => 1,
+            EffectiveMotion::Reduced => 3,
+            EffectiveMotion::Off => unreachable!(),
+        };
+        tw.revealed = tw.revealed.saturating_add(step).min(tw.total);
+        if !tw.is_active() {
+            self.typewriter = None;
+        }
+        self.dirty = true;
+    }
+
+    /// 为本次 dispatch 新增的 `added` 行启动打字机；先结束旧的避免范围混乱。
+    /// `skip` = 前导结构行数（blank / header），瞬显不逐字，不计入 total。
+    pub(super) fn start_typewriter(&mut self, added: usize, skip: usize) {
+        self.typewriter = None;
+        let body_lines = added.saturating_sub(skip);
+        if body_lines == 0 {
+            return;
+        }
+        let total = self
+            .transcript
+            .iter()
+            .rev()
+            .take(body_lines)
+            .map(|sl| UnicodeWidthStr::width(sl.text.as_str()))
+            .sum();
+        self.typewriter = Some(Typewriter {
+            lines: added,
+            skip,
+            revealed: 0,
+            total,
+        });
+    }
+
     fn handle_key(&mut self, key: KeyEvent) {
         // 通知条：任何新按键都清除上一条。
         self.notice = None;
+        // 打字机播放中：任意键立即全显。
+        if self.typewriter.as_ref().is_some_and(|t| t.is_active()) {
+            self.typewriter = None;
+            self.dirty = true;
+            // Showing* / Ending 态：仅跳过打字机（不触发 Ack），避免连按推进时
+            // 新文本 revealed=0 闪空；玩家再按一次才推进。
+            if matches!(
+                self.session.state(),
+                SessionState::ShowingIntro
+                    | SessionState::ShowingNarrative
+                    | SessionState::ShowingOutro
+                    | SessionState::Ending
+            ) {
+                return;
+            }
+            // Exploring 等态：不吞键，继续正常处理（字符进命令输入等）。
+        }
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.dispatch(Input::Quit);
             return;
@@ -528,6 +606,11 @@ impl App {
             },
             no_motion: self.motion.is_off(),
             animation: self.animation.as_ref().map(Animation::view),
+            typewriter: self
+                .typewriter
+                .as_ref()
+                .filter(|t| t.is_active())
+                .map(|t| t.as_view()),
         }
     }
 }
@@ -550,6 +633,33 @@ impl Animation {
         AnimationView {
             label: self.label,
             progress: (elapsed / total).clamp(0.0, 1.0),
+        }
+    }
+}
+
+/// 打字机：覆盖 transcript 末尾 `lines` 行，按显示宽度逐 tick 揭示。
+#[derive(Debug, Clone)]
+pub(super) struct Typewriter {
+    /// 覆盖末尾多少行。
+    pub(super) lines: usize,
+    /// 前导结构行数（header / blank），瞬显不逐字，不计入 total。
+    pub(super) skip: usize,
+    /// 已揭示的总显示宽度（列）。
+    pub(super) revealed: usize,
+    /// 总显示宽度（body_lines 行宽度之和）。
+    total: usize,
+}
+
+impl Typewriter {
+    fn is_active(&self) -> bool {
+        self.revealed < self.total
+    }
+
+    fn as_view(&self) -> TypewriterView {
+        TypewriterView {
+            lines: self.lines,
+            skip: self.skip,
+            revealed: self.revealed,
         }
     }
 }

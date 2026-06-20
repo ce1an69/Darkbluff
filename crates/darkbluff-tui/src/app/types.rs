@@ -25,6 +25,17 @@ pub struct AnimationView {
     pub progress: f32,
 }
 
+/// 打字机进度（传给视图层截断 transcript 末尾 `lines` 行）。
+#[derive(Debug, Clone, Copy)]
+pub struct TypewriterView {
+    /// 打字机覆盖的末尾行数。
+    pub lines: usize,
+    /// 前导结构行数（header / blank），瞬显不逐字。
+    pub skip: usize,
+    /// 已揭示的总显示宽度（列）。
+    pub revealed: usize,
+}
+
 impl EffectiveMotion {
     pub fn from_settings(motion: Motion, force_off: bool) -> Self {
         if force_off {

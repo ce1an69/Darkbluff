@@ -17,6 +17,9 @@ const MAX_TRANSCRIPT: usize = 512;
 impl App {
     /// 把一帧引擎产出映射到转录/菜单/状态。
     pub(super) fn process_outcome(&mut self, outcome: Outcome) {
+        let narrative = outcome.is_narrative();
+        let before = self.transcript_pushes;
+        self.pending_tw_skip = 0;
         match outcome {
             Outcome::Dialogue {
                 header,
@@ -39,11 +42,19 @@ impl App {
             Outcome::QuitRequested => self.running = false,
             Outcome::Ignored => {}
         }
+        if narrative && !self.motion.is_off() {
+            let added = self.transcript_pushes.saturating_sub(before);
+            if added > 0 {
+                let skip = std::mem::take(&mut self.pending_tw_skip);
+                self.start_typewriter(added, skip);
+            }
+        }
     }
 
     fn apply_dialogue(&mut self, header: String, body: String, notes: Vec<String>) {
         self.push_blank();
         self.push_line(header, header_style(theme::MAUVE));
+        self.pending_tw_skip = 2; // blank + header 瞬显
         self.push_md(&body);
         if !notes.is_empty() {
             self.push_md(&quote_block(&notes.join("  ·  ")));
@@ -53,18 +64,21 @@ impl App {
     fn apply_chapter_card(&mut self, title: &str, text: &str) {
         self.push_blank();
         self.push_line(title.into(), header_style(theme::LAVENDER));
+        self.pending_tw_skip = 2; // blank + title 瞬显
         self.push_md(text);
     }
 
     /// 场景描述：正常 markdown 渲染进转录（标题 + 正文），不引用包裹、不阻塞。
     fn apply_scene_description(&mut self, text: &str) {
         self.push_blank();
+        self.pending_tw_skip = 1; // blank 瞬显
         self.push_md(text);
     }
 
     /// 心声 / 记忆碎片 / 旁白（走不出去）：整段以引用块呈现，label 融入首行。
     fn apply_narrative(&mut self, label: String, text: &str) {
         self.push_blank();
+        self.pending_tw_skip = 1; // blank 瞬显
         self.push_md(&narrative_quote(&label, text));
     }
 
@@ -143,6 +157,7 @@ impl App {
         while self.transcript.len() > MAX_TRANSCRIPT {
             self.transcript.pop_front();
         }
+        self.transcript_pushes += 1;
     }
 
     pub(super) fn push_md(&mut self, body: &str) {

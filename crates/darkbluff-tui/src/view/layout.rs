@@ -13,7 +13,7 @@ use crate::theme;
 
 use super::ViewState;
 use super::overlays::draw_suggestions;
-use super::text::wrap_by_width;
+use super::text::{count_visual_lines, truncate_by_width, wrap_by_width};
 
 const INPUT_PROMPT: &str = "> ";
 
@@ -99,18 +99,61 @@ pub(super) fn draw_transcript(frame: &mut Frame, area: Rect, state: &ViewState<'
         return;
     }
 
-    // 从尾部倒序折行，只收集可见的 `height` 行，避免对整条转录每帧全量折行。
-    let mut rows: Vec<Line<'static>> = Vec::new();
-    'outer: for sl in state.transcript.iter().rev() {
-        for chunk in wrap_by_width(&sl.text, width).into_iter().rev() {
-            if rows.len() >= height {
-                break 'outer;
-            }
-            rows.push(Line::styled(chunk, sl.style));
+    // 只渲染可见的 `height` 视觉行，避免对整条转录每帧全量折行。
+    // 打字机：reveal 预算只分给「可见的覆盖区正文行」(正序消耗)。覆盖区前 skip 行
+    // (header/blank) 瞬显；正文行整行折行后跨视觉行逐字揭示，行数固定不跳(#5)。
+    let n = state.transcript.len();
+    let (tw_lines, tw_skip, revealed) = match state.typewriter {
+        Some(tw) => (tw.lines, tw.skip, tw.revealed),
+        None => (0, 0, usize::MAX),
+    };
+
+    // Pass 1：倒序累计视觉行数，定位首个可见源行 `start`(只计数，零 clone)。
+    let mut start = n;
+    let mut used = 0usize;
+    for (i, sl) in state.transcript.iter().enumerate().rev() {
+        start = i;
+        used += count_visual_lines(&sl.text, width);
+        if used >= height {
+            break;
         }
     }
-    rows.reverse();
-    let items: Vec<ListItem> = rows.iter().map(|l| ListItem::new(l.clone())).collect();
+
+    // Pass 2：正序遍历可见源行 [start, n)。
+    //   - 非覆盖区 → 正常折行。
+    //   - 覆盖区前 skip 行(结构行) → 瞬显。
+    //   - 覆盖区正文行(body) → 整行折行后跨视觉行逐字揭示(行数固定不跳，#5)。
+    let mut reveal = revealed;
+    let mut rows: Vec<Line<'static>> = Vec::new();
+    for i in start..n {
+        let sl = &state.transcript[i];
+        let from_tail = n - i; // 1-based：末行为 1
+        let in_tw = tw_lines > 0 && from_tail <= tw_lines;
+        let in_skip = in_tw && from_tail > tw_lines - tw_skip;
+        if in_skip {
+            for chunk in wrap_by_width(&sl.text, width) {
+                rows.push(Line::styled(chunk, sl.style));
+            }
+        } else if in_tw {
+            for chunk in wrap_by_width(&sl.text, width) {
+                let cw = UnicodeWidthStr::width(chunk.as_str());
+                let show = reveal.min(cw);
+                reveal = reveal.saturating_sub(show);
+                rows.push(Line::styled(truncate_by_width(&chunk, show), sl.style));
+            }
+        } else {
+            for chunk in wrap_by_width(&sl.text, width) {
+                rows.push(Line::styled(chunk, sl.style));
+            }
+        }
+    }
+
+    // Pass 1 的行边界近似可能多收一源行，裁掉超出 `height` 的部分。
+    let drop = rows.len().saturating_sub(height);
+    let items: Vec<ListItem> = rows[drop..]
+        .iter()
+        .map(|l| ListItem::new(l.clone()))
+        .collect();
     frame.render_widget(List::new(items).block(block), area);
 }
 

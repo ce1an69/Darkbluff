@@ -160,6 +160,21 @@ pub enum Outcome {
     Ignored,
 }
 
+impl Outcome {
+    /// 剧情类产出（对话 / 过场 / 场景 / 心声）：渲染层对其文本逐字揭示。
+    /// 新增剧情类变体时只需在此扩展，避免各渲染端各自维护镜像 matches!。
+    pub fn is_narrative(&self) -> bool {
+        matches!(
+            self,
+            Self::Dialogue { .. }
+                | Self::ChapterIntro { .. }
+                | Self::ChapterOutro { .. }
+                | Self::SceneDescription { .. }
+                | Self::Narrative { .. }
+        )
+    }
+}
+
 /// 菜单选择。TUI 可按序号选择，GUI 可直接按 option id 选择。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selection {

@@ -67,6 +67,7 @@ fn renders_animation_indicator() {
         map: None,
         no_motion: false,
         animation: Some(animation),
+        typewriter: None,
     };
 
     let backend = TestBackend::new(100, 28);
@@ -141,6 +142,7 @@ fn renders_exploring_layout_npcs_and_palette() {
         map: None,
         no_motion: false,
         animation: None,
+        typewriter: None,
     };
 
     let backend = TestBackend::new(100, 28);
@@ -202,6 +204,7 @@ fn renders_menu_and_confirmation_overlays() {
         map: None,
         no_motion: false,
         animation: None,
+        typewriter: None,
     };
     let backend = TestBackend::new(100, 28);
     let mut term = Terminal::new(backend).unwrap();
@@ -234,6 +237,7 @@ fn renders_menu_and_confirmation_overlays() {
         map: None,
         no_motion: false,
         animation: None,
+        typewriter: None,
     };
     term.draw(|f| draw(f, &vs2)).unwrap();
     let text2 = buffer_text(term.backend().buffer());
@@ -283,6 +287,7 @@ fn renders_home_screen() {
         map: None,
         no_motion: false,
         animation: None,
+        typewriter: None,
     };
     let backend = TestBackend::new(100, 28);
     let mut term = Terminal::new(backend).unwrap();
@@ -336,6 +341,7 @@ fn renders_settings_current_motion_marker() {
         map: None,
         no_motion: false,
         animation: None,
+        typewriter: None,
     };
     let backend = TestBackend::new(100, 28);
     let mut term = Terminal::new(backend).unwrap();
@@ -415,6 +421,7 @@ fn renders_map_panel_tree_and_checkpoints() {
         map: Some(&groups),
         no_motion: false,
         animation: None,
+        typewriter: None,
     };
     let backend = TestBackend::new(100, 28);
     let mut term = Terminal::new(backend).unwrap();
@@ -431,4 +438,90 @@ fn renders_map_panel_tree_and_checkpoints() {
     ] {
         assert!(text.contains(needle), "map missing {needle:?}:\n{text}");
     }
+}
+
+#[test]
+fn draw_transcript_typewriter_reveals_only_revealed() {
+    use crate::app::TypewriterView;
+    // 单行 5 汉字（10 列）；打字机只揭 4 列 → 仅 "一二" 可见，"三四五" 不应泄漏。
+    let transcript = VecDeque::from([StyledLine {
+        text: "一二三四五".into(),
+        style: ratatui::style::Style::default(),
+    }]);
+    let input = CommandInput::default();
+    let state = SessionState::Exploring;
+    let typewriter = TypewriterView { lines: 1, skip: 0, revealed: 4 };
+    let empty = String::new();
+    let vs = ViewState {
+        title: &empty,
+        scene_name: &empty,
+        world: World::Surface,
+        scene_text: &empty,
+        npcs: &[],
+        endings: (0, 0),
+        state: &state,
+        input: &input,
+        transcript: &transcript,
+        menu: None,
+        confirmation: None,
+        suggestions: None,
+        note: None,
+        notice: None,
+        map: None,
+        no_motion: false,
+        animation: None,
+        typewriter: Some(typewriter),
+    };
+    let backend = TestBackend::new(100, 28);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| draw(f, &vs)).unwrap();
+    let text = buffer_text(term.backend().buffer());
+    assert!(text.contains("一二"), "revealed part missing:\n{text}");
+    assert!(!text.contains("三四五"), "unrevealed part leaked:\n{text}");
+}
+
+#[test]
+fn draw_transcript_typewriter_keeps_visible_when_block_taller_than_panel() {
+    use crate::app::TypewriterView;
+    // 20 行叙事（每行 "AAAA"，4 列）覆盖整个 transcript；面板可见行数 < 20。
+    // typewriter revealed 只够前两行。修复前 reveal 被屏幕外的覆盖区前部吃光、可见区全空；
+    // 修复后 reveal 只分给可见行，可见区顶部仍有内容。
+    let transcript: VecDeque<StyledLine> = (0..20)
+        .map(|_| StyledLine {
+            text: "AAAA".into(),
+            style: ratatui::style::Style::default(),
+        })
+        .collect();
+    let input = CommandInput::default();
+    let state = SessionState::Exploring;
+    let typewriter = TypewriterView { lines: 20, skip: 0, revealed: 8 };
+    let empty = String::new();
+    let vs = ViewState {
+        title: &empty,
+        scene_name: &empty,
+        world: World::Surface,
+        scene_text: &empty,
+        npcs: &[],
+        endings: (0, 0),
+        state: &state,
+        input: &input,
+        transcript: &transcript,
+        menu: None,
+        confirmation: None,
+        suggestions: None,
+        note: None,
+        notice: None,
+        map: None,
+        no_motion: false,
+        animation: None,
+        typewriter: Some(typewriter),
+    };
+    let backend = TestBackend::new(100, 28);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| draw(f, &vs)).unwrap();
+    let text = buffer_text(term.backend().buffer());
+    assert!(
+        text.contains("AAAA"),
+        "visible rows empty under typewriter (desync regression):\n{text}"
+    );
 }

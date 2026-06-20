@@ -25,7 +25,7 @@ use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
-use crate::app::{AnimationView, NotePanel, Notice, NpcInfo, Suggestions};
+use crate::app::{AnimationView, NotePanel, Notice, NpcInfo, Suggestions, TypewriterView};
 use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::theme;
@@ -78,6 +78,7 @@ pub struct ViewState<'a> {
     pub map: Option<&'a [MapGroup]>,
     pub no_motion: bool,
     pub animation: Option<AnimationView>,
+    pub typewriter: Option<TypewriterView>,
 }
 
 /// 渲染一帧。标题态走整页首页，其余走常规三段布局。
