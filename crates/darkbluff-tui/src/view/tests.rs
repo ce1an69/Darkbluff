@@ -59,6 +59,7 @@ fn renders_animation_indicator() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: None,
         confirmation: None,
         suggestions: None,
@@ -134,6 +135,7 @@ fn renders_exploring_layout_npcs_and_palette() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: None,
         confirmation: None,
         suggestions: Some(&suggestions),
@@ -196,6 +198,7 @@ fn renders_menu_and_confirmation_overlays() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: Some(menu),
         confirmation: None,
         suggestions: None,
@@ -229,6 +232,7 @@ fn renders_menu_and_confirmation_overlays() {
         state: &confirming,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: None,
         confirmation: Some(&action),
         suggestions: None,
@@ -279,6 +283,7 @@ fn renders_home_screen() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: Some(menu),
         confirmation: None,
         suggestions: None,
@@ -324,6 +329,7 @@ fn renders_settings_current_value() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: Some(menu),
         confirmation: None,
         suggestions: None,
@@ -404,6 +410,7 @@ fn renders_map_panel_tree_and_checkpoints() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: Some(menu),
         confirmation: None,
         suggestions: None,
@@ -453,6 +460,7 @@ fn draw_transcript_typewriter_reveals_only_revealed() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: None,
         confirmation: None,
         suggestions: None,
@@ -497,6 +505,7 @@ fn draw_transcript_typewriter_keeps_visible_when_block_taller_than_panel() {
         state: &state,
         input: &input,
         transcript: &transcript,
+        offset: 0,
         menu: None,
         confirmation: None,
         suggestions: None,
@@ -515,4 +524,66 @@ fn draw_transcript_typewriter_keeps_visible_when_block_taller_than_panel() {
         text.contains("AAAA"),
         "visible rows empty under typewriter (desync regression):\n{text}"
     );
+}
+
+/// 用给定 offset 渲染转录并返回合成文本（视图层信任 offset，钳制由 app 层负责）。
+fn render_transcript_with_offset(transcript: &VecDeque<StyledLine>, offset: usize) -> String {
+    let input = CommandInput::default();
+    let state = SessionState::Exploring;
+    let empty = String::new();
+    let vs = ViewState {
+        title: &empty,
+        scene_name: &empty,
+        world: World::Surface,
+        scene_text: &empty,
+        npcs: &[],
+        endings: (0, 0),
+        state: &state,
+        input: &input,
+        transcript,
+        offset,
+        menu: None,
+        confirmation: None,
+        suggestions: None,
+        note: None,
+        notice: None,
+        map: None,
+        no_motion: false,
+        animation: None,
+        typewriter: None,
+    };
+    let backend = TestBackend::new(100, 28);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| draw(f, &vs)).unwrap();
+    buffer_text(term.backend().buffer())
+}
+
+#[test]
+fn draw_transcript_renders_window_for_offset() {
+    // 40 行（每行单视觉行），面板可见高约 18 → max offset = 22。
+    let transcript: VecDeque<StyledLine> = (0..40)
+        .map(|i| StyledLine {
+            text: format!("L{i:02}"),
+            style: ratatui::style::Style::default(),
+        })
+        .collect();
+
+    // offset=0 → 贴底：末 18 行 L22..=L39 可见，L21 不可见。
+    let text = render_transcript_with_offset(&transcript, 0);
+    assert!(text.contains("L39"), "tail missing at offset 0:\n{text}");
+    assert!(text.contains("L22"), "window top missing at offset 0:\n{text}");
+    assert!(!text.contains("L21"), "above window leaked at offset 0:\n{text}");
+
+    // offset=10 → 窗 [12,30)：L12/L29 可见，L11/L30/L39 不可见。
+    let text = render_transcript_with_offset(&transcript, 10);
+    assert!(text.contains("L12"), "window top missing:\n{text}");
+    assert!(text.contains("L29"), "window bottom missing:\n{text}");
+    assert!(!text.contains("L11"), "above window leaked:\n{text}");
+    assert!(!text.contains("L30"), "below window leaked:\n{text}");
+    assert!(!text.contains("L39"), "tail leaked while scrolled:\n{text}");
+
+    // offset=max(22) → 顶部 [0,18)：L00 可见，L18 不可见。
+    let text = render_transcript_with_offset(&transcript, 22);
+    assert!(text.contains("L00"), "top missing at max offset:\n{text}");
+    assert!(!text.contains("L18"), "below top window leaked:\n{text}");
 }

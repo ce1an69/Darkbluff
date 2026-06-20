@@ -4,6 +4,7 @@
 //! [`suggest`]（斜杠补全）。本模块只负责驱动会话与组装视图状态。
 
 mod outcome;
+mod scroll;
 mod suggest;
 mod types;
 
@@ -41,6 +42,9 @@ pub struct App {
     pub(super) input: CommandInput,
     /// 对话/剧情转录（markdown 渲染后的带样式行）。系统提示不入此列。
     pub(super) transcript: VecDeque<StyledLine>,
+    /// 转录滚动偏移（从末尾往上计的视觉行数；0=贴底）。新对话到达归零；
+    /// 渲染前由 [`App::clamp_transcript_offset`] 按面板几何钳制到 [0, max]。
+    pub(super) transcript_offset: usize,
     pub(super) menu: Option<ActiveMenu>,
     pub(super) confirmation: Option<ConfirmationAction>,
     pub(super) suggestions: Option<Suggestions>,
@@ -79,6 +83,7 @@ impl App {
             running: true,
             input: CommandInput::default(),
             transcript: VecDeque::new(),
+            transcript_offset: 0,
             menu: None,
             confirmation: None,
             suggestions: None,
@@ -109,6 +114,9 @@ impl App {
                 continue;
             }
             if self.dirty {
+                // 渲染前按当前终端尺寸钳制滚动偏移（视图层不再写回，保持无副作用）。
+                let size = terminal.terminal().size()?;
+                self.clamp_transcript_offset(size);
                 terminal.terminal().draw(|frame| {
                     let state = self.view_state();
                     view::draw(frame, &state);
@@ -129,6 +137,11 @@ impl App {
                     Event::Key(key) if key.kind == KeyEventKind::Press => {
                         self.dirty = true;
                         self.handle_key(key);
+                    }
+                    Event::Mouse(mouse) => {
+                        if self.handle_mouse(mouse) {
+                            self.dirty = true;
+                        }
                     }
                     Event::Resize(_, _) => self.dirty = true,
                     _ => {}
@@ -204,13 +217,7 @@ impl App {
             self.dirty = true;
             // Showing* / Ending 态：仅跳过打字机（不触发 Ack），避免连按推进时
             // 新文本 revealed=0 闪空；玩家再按一次才推进。
-            if matches!(
-                self.session.state(),
-                SessionState::ShowingIntro
-                    | SessionState::ShowingNarrative
-                    | SessionState::ShowingOutro
-                    | SessionState::Ending
-            ) {
+            if self.session.state().is_ack() {
                 return;
             }
             // Exploring 等态：不吞键，继续正常处理（字符进命令输入等）。
@@ -307,6 +314,18 @@ impl App {
     }
 
     fn handle_ack_key(&mut self, key: KeyEvent) {
+        // 滚动键不推进剧情，只滚转录（剧情展示态可回看上文后再按 Enter 继续）。
+        match key.code {
+            KeyCode::PageUp => {
+                self.scroll_transcript(scroll::PAGE_STEP);
+                return;
+            }
+            KeyCode::PageDown => {
+                self.scroll_transcript(-scroll::PAGE_STEP);
+                return;
+            }
+            _ => {}
+        }
         if matches!(
             key.code,
             KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char(_)
@@ -345,6 +364,9 @@ impl App {
             KeyCode::Down if palette_open => self.move_suggest(1),
             KeyCode::Tab if palette_open => self.complete_suggestion(),
             KeyCode::Enter => self.submit_command(),
+            // 滚动键：与补全浮层互不冲突（浮层用 ↑/↓ 选词）。
+            KeyCode::PageUp => self.scroll_transcript(scroll::PAGE_STEP),
+            KeyCode::PageDown => self.scroll_transcript(-scroll::PAGE_STEP),
             KeyCode::Backspace
             | KeyCode::Delete
             | KeyCode::Left
@@ -595,6 +617,7 @@ impl App {
             state,
             input: &self.input,
             transcript: &self.transcript,
+            offset: self.transcript_offset,
             menu: is_menu_state(state)
                 .then_some(self.menu.as_ref())
                 .flatten()

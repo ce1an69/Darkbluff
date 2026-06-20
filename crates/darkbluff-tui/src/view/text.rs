@@ -62,7 +62,7 @@ pub(super) fn truncate_by_width(s: &str, max_w: usize) -> String {
 }
 
 /// 该文本在 `max_w` 列宽下折成多少视觉行（仅计数、不分配），用于打字机定位可见窗口。
-pub(super) fn count_visual_lines(s: &str, max_w: usize) -> usize {
+pub(crate) fn count_visual_lines(s: &str, max_w: usize) -> usize {
     if max_w == 0 || s.is_empty() {
         return 1;
     }

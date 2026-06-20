@@ -1,5 +1,7 @@
 //! 常规布局面板：标题条 / 对话转录 / 场景+NPC / 输入框。
 
+use std::collections::VecDeque;
+
 use darkbluff_core::engine::SessionState;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -9,6 +11,7 @@ use ratatui::widgets::{List, ListItem, Paragraph, Wrap};
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::NpcInfo;
+use crate::markdown::StyledLine;
 use crate::theme;
 
 use super::ViewState;
@@ -71,58 +74,77 @@ pub(super) fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) 
 }
 
 pub(super) fn draw_transcript(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
-    let block = theme::panel(Some("Transcript"), false);
+    if state.transcript.is_empty() {
+        render_empty_transcript(frame, area);
+        return;
+    }
+    let offset = state.offset;
+    let title = transcript_title(offset);
+    let block = theme::panel(Some(&title), false);
     let inner = block.inner(area);
     let width = inner.width as usize;
     let height = inner.height as usize;
 
-    if state.transcript.is_empty() {
-        let hint = Paragraph::new(Line::from(vec![
-            Span::styled(
-                "No dialogue yet. Type ",
-                Style::default().fg(theme::SUBTEXT0),
-            ),
-            Span::styled(
-                "/ask",
-                Style::default()
-                    .fg(theme::MAUVE)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                " to question someone.",
-                Style::default().fg(theme::SUBTEXT0),
-            ),
-        ]))
-        .alignment(Alignment::Center)
-        .block(block);
-        frame.render_widget(hint, area);
-        return;
-    }
+    // offset 已由 app 层钳制；只渲染覆盖可见窗的源行 [start, n) 并取窗显示（无写回、渲染无副作用）。
+    let start = find_window_start(state.transcript, width, height, offset);
+    let rows = build_transcript_rows(state, start, width);
+    let items = window_items(&rows, height, offset);
+    frame.render_widget(List::new(items).block(block), area);
+}
 
-    // 只渲染可见的 `height` 视觉行，避免对整条转录每帧全量折行。
-    // 打字机：reveal 预算只分给「可见的覆盖区正文行」(正序消耗)。覆盖区前 skip 行
-    // (header/blank) 瞬显；正文行整行折行后跨视觉行逐字揭示，行数固定不跳(#5)。
+/// 空转录提示（transcript 仅增长，空即贴底，无 offset 概念）。
+fn render_empty_transcript(frame: &mut Frame, area: Rect) {
+    let hint = Paragraph::new(Line::from(vec![
+        Span::styled("No dialogue yet. Type ", Style::default().fg(theme::SUBTEXT0)),
+        Span::styled(
+            "/ask",
+            Style::default()
+                .fg(theme::MAUVE)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" to question someone.", Style::default().fg(theme::SUBTEXT0)),
+    ]))
+    .alignment(Alignment::Center)
+    .block(theme::panel(Some("Transcript"), false));
+    frame.render_widget(hint, area);
+}
+
+/// offset>0 时标题加位置指示（↑N = 末尾之上 N 视觉行）。
+fn transcript_title(offset: usize) -> String {
+    if offset > 0 {
+        format!("Transcript ↑{offset}")
+    } else {
+        "Transcript".to_string()
+    }
+}
+
+/// Pass 1：从末尾倒序累计视觉行数，定位首个需渲染的源行 `start`。
+/// `need = height + offset`：窗完整覆盖所需；累计达标即早退（offset=0 时仅扫约 height 行）。
+fn find_window_start(
+    transcript: &VecDeque<StyledLine>,
+    width: usize,
+    height: usize,
+    offset: usize,
+) -> usize {
+    let need = height.saturating_add(offset);
+    let mut cum = 0usize;
+    for (i, sl) in transcript.iter().enumerate().rev() {
+        cum += count_visual_lines(&sl.text, width);
+        if cum >= need {
+            return i;
+        }
+    }
+    0 // 转录总行数 < need：从头渲染
+}
+
+/// Pass 2：正序遍历源行 [start, n) 折行成视觉行。
+/// 打字机：覆盖区前 skip 行(结构行)瞬显；正文行整行折行后跨视觉行逐字揭示(行数固定不跳，#5)。
+fn build_transcript_rows(state: &ViewState<'_>, start: usize, width: usize) -> Vec<Line<'static>> {
     let n = state.transcript.len();
     let (tw_lines, tw_skip, revealed) = match state.typewriter {
         Some(tw) => (tw.lines, tw.skip, tw.revealed),
         None => (0, 0, usize::MAX),
     };
-
-    // Pass 1：倒序累计视觉行数，定位首个可见源行 `start`(只计数，零 clone)。
-    let mut start = n;
-    let mut used = 0usize;
-    for (i, sl) in state.transcript.iter().enumerate().rev() {
-        start = i;
-        used += count_visual_lines(&sl.text, width);
-        if used >= height {
-            break;
-        }
-    }
-
-    // Pass 2：正序遍历可见源行 [start, n)。
-    //   - 非覆盖区 → 正常折行。
-    //   - 覆盖区前 skip 行(结构行) → 瞬显。
-    //   - 覆盖区正文行(body) → 整行折行后跨视觉行逐字揭示(行数固定不跳，#5)。
     let mut reveal = revealed;
     let mut rows: Vec<Line<'static>> = Vec::new();
     for i in start..n {
@@ -147,14 +169,18 @@ pub(super) fn draw_transcript(frame: &mut Frame, area: Rect, state: &ViewState<'
             }
         }
     }
+    rows
+}
 
-    // Pass 1 的行边界近似可能多收一源行，裁掉超出 `height` 的部分。
-    let drop = rows.len().saturating_sub(height);
-    let items: Vec<ListItem> = rows[drop..]
+/// 取窗 [begin, end)：末尾 `offset` 行之上、高 `height` 的视窗（offset=0 即贴底）。
+fn window_items(rows: &[Line<'static>], height: usize, offset: usize) -> Vec<ListItem<'static>> {
+    let total = rows.len();
+    let end = total.saturating_sub(offset);
+    let begin = end.saturating_sub(height);
+    rows[begin..end]
         .iter()
         .map(|l| ListItem::new(l.clone()))
-        .collect();
-    frame.render_widget(List::new(items).block(block), area);
+        .collect()
 }
 
 pub(super) fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
@@ -260,10 +286,7 @@ pub(super) fn draw_input(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
             "Confirm",
             "y / Enter confirm · n / Esc cancel",
         ),
-        SessionState::ShowingIntro
-        | SessionState::ShowingNarrative
-        | SessionState::ShowingOutro
-        | SessionState::Ending => render_hint(frame, inner, "Continue", "press Enter"),
+        s if s.is_ack() => render_hint(frame, inner, "Continue", "press Enter · wheel/PageUp 滚动"),
         _ => render_hint(
             frame,
             inner,

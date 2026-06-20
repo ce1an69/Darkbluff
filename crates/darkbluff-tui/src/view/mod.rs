@@ -30,8 +30,47 @@ use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::theme;
 
+/// 控制器层按显示宽/高计算滚动量时复用的折行计数。
+pub(crate) use text::count_visual_lines;
+
 const MIN_WIDTH: u16 = 86;
 const MIN_HEIGHT: u16 = 24;
+/// 常规布局尺寸（[`split_panels`] 与 [`transcript_text_rect`] 共用，避免两处布局漂移）。
+const HEADER_H: u16 = 3;
+const INPUT_H: u16 = 3;
+const TRANSCRIPT_PCT: u16 = 58;
+const SCENE_PCT: u16 = 42;
+
+/// 常规三段布局的面板切分（控制器层算滚动量时也复用，单源避免漂移）。
+/// 返回 (header, transcript, scene, input) 四区。
+fn split_panels(inner: Rect) -> (Rect, Rect, Rect, Rect) {
+    let [header, body, input] = Layout::vertical([
+        Constraint::Length(HEADER_H),
+        Constraint::Min(8),
+        Constraint::Length(INPUT_H),
+    ])
+    .areas(inner);
+    let [transcript, scene] = Layout::horizontal([
+        Constraint::Percentage(TRANSCRIPT_PCT),
+        Constraint::Percentage(SCENE_PCT),
+    ])
+    .areas(body);
+    (header, transcript, scene, input)
+}
+
+/// 转录面板正文区（去边框）；终端过小（转录不显示）时返回 None。
+/// 控制器层据此按显示宽/高钳制滚动偏移，与 [`layout::draw_transcript`] 的 inner 完全一致。
+pub(crate) fn transcript_text_rect(full: Rect) -> Option<Rect> {
+    if full.width < MIN_WIDTH || full.height < MIN_HEIGHT {
+        return None;
+    }
+    let inner = full.inner(Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
+    let (_, transcript, _, _) = split_panels(inner);
+    Some(theme::panel(None, false).inner(transcript))
+}
 
 pub struct MenuView<'a> {
     pub kind: MenuKind,
@@ -59,7 +98,10 @@ pub struct MapRow {
     pub label: String,
 }
 
-/// 一帧渲染所需的全部只读视图状态（由 app 层组装）。
+/// 一帧渲染所需的只读视图状态（由 app 层组装）。
+///
+/// `offset` 为转录滚动偏移（末尾之上多少视觉行；0=贴底），已由 app 层按面板几何
+/// 钳制到 [0, max]，视图层只读取、不写回（渲染保持无副作用）。
 pub struct ViewState<'a> {
     pub title: &'a str,
     pub scene_name: &'a str,
@@ -70,6 +112,7 @@ pub struct ViewState<'a> {
     pub state: &'a SessionState,
     pub input: &'a CommandInput,
     pub transcript: &'a VecDeque<StyledLine>,
+    pub offset: usize,
     pub menu: Option<MenuView<'a>>,
     pub confirmation: Option<&'a ConfirmationAction>,
     pub suggestions: Option<&'a Suggestions>,
@@ -107,14 +150,7 @@ pub fn draw(frame: &mut Frame, state: &ViewState<'_>) {
         vertical: 1,
         horizontal: 1,
     });
-    let [header_a, body_a, input_a] = Layout::vertical([
-        Constraint::Length(3),
-        Constraint::Min(8),
-        Constraint::Length(3),
-    ])
-    .areas(inner);
-    let [transcript_a, scene_a] =
-        Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)]).areas(body_a);
+    let (header_a, transcript_a, scene_a, input_a) = split_panels(inner);
 
     layout::draw_header(frame, header_a, state);
     layout::draw_transcript(frame, transcript_a, state);

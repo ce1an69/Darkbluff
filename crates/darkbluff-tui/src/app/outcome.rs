@@ -17,6 +17,9 @@ impl App {
     /// 把一帧引擎产出映射到转录/菜单/状态。
     pub(super) fn process_outcome(&mut self, outcome: Outcome) {
         let narrative = outcome.is_narrative();
+        // 哪些产出会推新内容进转录且应「回到底部」：先判好（match 会消费 outcome）。
+        // 场景描述是背景信息（同时显示在场景面板），不打断玩家当前的回看位置。
+        let snaps = outcome_snaps_to_bottom(&outcome);
         let before = self.transcript_pushes;
         self.pending_tw_skip = 0;
         match outcome {
@@ -40,6 +43,9 @@ impl App {
             Outcome::ConfirmationRequested { action, .. } => self.apply_confirmation(action),
             Outcome::QuitRequested => self.running = false,
             Outcome::Ignored => {}
+        }
+        if snaps {
+            self.transcript_offset = 0;
         }
         if narrative && !self.motion.is_off() {
             let added = self.transcript_pushes.saturating_sub(before);
@@ -171,6 +177,20 @@ impl App {
     }
 }
 
+/// 哪些产出会把新内容推进转录并应「回到底部」。
+/// 场景描述属背景信息（同时显示在场景面板），不打断玩家当前的回看位置。
+fn outcome_snaps_to_bottom(outcome: &Outcome) -> bool {
+    matches!(
+        outcome,
+        Outcome::Dialogue { .. }
+            | Outcome::ChapterIntro { .. }
+            | Outcome::ChapterOutro { .. }
+            | Outcome::Narrative { .. }
+            | Outcome::EndingReached { .. }
+            | Outcome::Message(..)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,6 +203,48 @@ mod tests {
             crate::markdown::render(&q).into_iter().map(|s| s.text).collect();
         assert_eq!(rendered[0], "│ 〔旁白〕走不出去");
         assert!(rendered.iter().any(|l| l.contains("你朝桥对面走。")));
+    }
+
+    #[test]
+    fn snaps_to_bottom_excludes_scene_description() {
+        let snap = [
+            Outcome::Dialogue {
+                header: "h".into(),
+                body: "b".into(),
+                notes: vec![],
+            },
+            Outcome::ChapterIntro { text: "t".into() },
+            Outcome::ChapterOutro { text: "t".into() },
+            Outcome::Narrative {
+                label: "l".into(),
+                text: "t".into(),
+            },
+            Outcome::EndingReached {
+                title: "t".into(),
+                found: 0,
+                total: 1,
+            },
+            Outcome::Message(Message::info(vec!["x".into()])),
+        ];
+        let no_snap = [
+            Outcome::SceneDescription { text: "t".into() },
+            Outcome::MenuRequested {
+                kind: MenuKind::Title,
+                prompt: "p".into(),
+                options: vec![],
+            },
+            Outcome::ConfirmationRequested {
+                action: ConfirmationAction::NewGame,
+                prompt: "p".into(),
+            },
+            Outcome::Ignored,
+        ];
+        for o in snap {
+            assert!(outcome_snaps_to_bottom(&o), "{o:?} 应回底");
+        }
+        for o in no_snap {
+            assert!(!outcome_snaps_to_bottom(&o), "{o:?} 不应回底");
+        }
     }
 }
 

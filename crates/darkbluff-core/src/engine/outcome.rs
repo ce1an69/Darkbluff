@@ -223,3 +223,49 @@ pub enum SessionState {
     ShowingOutro,
     Ending,
 }
+
+impl SessionState {
+    /// 剧情展示/确认推进态：Showing* + Ending（玩家按任意键 Ack 推进）。
+    /// 引擎 handle、TUI 的键路由 / 滚动门控 / 提示语共用此归纳，避免四处字面名单漂移。
+    pub fn is_ack(&self) -> bool {
+        matches!(
+            self,
+            SessionState::ShowingIntro
+                | SessionState::ShowingNarrative
+                | SessionState::ShowingOutro
+                | SessionState::Ending
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SessionState;
+
+    #[test]
+    fn is_ack_covers_showing_and_ending_only() {
+        let ack = [
+            SessionState::ShowingIntro,
+            SessionState::ShowingNarrative,
+            SessionState::ShowingOutro,
+            SessionState::Ending,
+        ];
+        let not_ack = [
+            SessionState::Title,
+            SessionState::ChoosingSettings,
+            SessionState::Exploring,
+            SessionState::ChoosingAskCharacter,
+            SessionState::ChoosingAskTopic,
+            SessionState::ChoosingJudgeCharacter,
+            SessionState::ChoosingMove,
+            SessionState::ChoosingCheckpoint,
+            SessionState::Confirming,
+        ];
+        for s in ack {
+            assert!(s.is_ack(), "{s:?} should be ack");
+        }
+        for s in not_ack {
+            assert!(!s.is_ack(), "{s:?} should NOT be ack");
+        }
+    }
+}
