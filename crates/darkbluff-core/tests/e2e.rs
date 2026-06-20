@@ -42,7 +42,7 @@ fn new_game_intro_then_exploring() {
     assert!(matches!(s.start_new_game(), Outcome::ChapterIntro { .. }));
     assert_eq!(*s.state(), SessionState::ShowingIntro);
     match s.handle(Input::Ack) {
-        Outcome::Message(message) => assert!(message.lines.join("").contains("酒馆")),
+        Outcome::SceneDescription { text } => assert!(text.contains("酒馆")),
         o => panic!("expected show, got {:?}", o),
     }
     assert_eq!(*s.state(), SessionState::Exploring);
@@ -162,7 +162,7 @@ fn map_rollback_before_judgment_undoes_judgment() {
         o => panic!("got {:?}", o),
     }
     match s.handle(Input::Confirm(true)) {
-        Outcome::Message(_) => {}
+        Outcome::SceneDescription { .. } => {}
         o => panic!("got {:?}", o),
     }
     // 审判已被撤销

@@ -91,7 +91,7 @@ fn narrative_drains_on_chapter_enter() {
             .any(|n| n.id == "voice_open")
     );
     // Ack 心声 → 无更多 → 回探索态（场景描述）。
-    assert!(matches!(s.handle(Input::Ack), Outcome::Message(_)));
+    assert!(matches!(s.handle(Input::Ack), Outcome::SceneDescription { .. }));
     assert_eq!(*s.state(), SessionState::Exploring);
     assert_eq!(s.save().current_scene, "alley");
 }

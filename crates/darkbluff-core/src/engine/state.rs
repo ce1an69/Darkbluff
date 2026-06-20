@@ -115,14 +115,14 @@ impl Session {
                 .unwrap_or(false)
     }
 
-    /// 当前场景当前视角的描述文本（缺失时给降级提示）。
-    pub(crate) fn scene_description_messages(&self) -> Vec<String> {
+    /// 当前场景当前视角的描述文本（缺失时给降级提示）。整体返回，由渲染层按 markdown 处理。
+    pub(crate) fn scene_description_text(&self) -> String {
         let ch = &self.save.current_chapter;
         let scene = &self.save.current_scene;
         let world = self.save.current_world;
         match self.engine.get_scene_description(ch, scene, world) {
-            Some(text) => vec![text.to_string()],
-            None => vec!["（该视角的场景描述缺失）".into()],
+            Some(text) => text.to_string(),
+            None => "（该视角的场景描述缺失）".into(),
         }
     }
 

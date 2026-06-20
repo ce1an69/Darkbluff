@@ -1,7 +1,7 @@
 //! 极简 Markdown → 带样式行的渲染。
 //!
-//! 仅处理对话/剧情文本里实际出现的子集：标题（`#`/`##`/`###`）、无序列表（`- `/`* `）、
-//! 段落。每行一个 [`StyledLine`]（行内统一样式），便于视图层按显示宽度折行。
+//! 仅处理对话/剧情文本里实际出现的子集：标题（`#`/`##`/`###`）、引用块（`> `）、
+//! 无序列表（`- `/`* `）、段落。每行一个 [`StyledLine`]（行内统一样式），便于视图层按显示宽度折行。
 //! 行内 `**bold**` 等inline 标记不解析（数据里几乎不用），保持实现极简。
 
 use ratatui::style::{Modifier, Style};
@@ -29,6 +29,16 @@ pub fn render(text: &str) -> Vec<StyledLine> {
                 style: Style::default()
                     .fg(theme::LAVENDER)
                     .add_modifier(Modifier::BOLD),
+            });
+        } else if let Some(rest) = line.strip_prefix('>') {
+            let content = rest.trim_start();
+            out.push(StyledLine {
+                text: if content.is_empty() {
+                    "│".to_string()
+                } else {
+                    format!("│ {}", content)
+                },
+                style: Style::default().fg(theme::SUBTEXT0),
             });
         } else if let Some(item) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) {
             out.push(StyledLine {
@@ -80,6 +90,14 @@ mod tests {
     #[test]
     fn render_skips_blank_lines() {
         assert_eq!(texts(&render("\n\na\n\n\nb\n")), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn render_quotes_blockquote_with_bar_prefix() {
+        // `> 文字` → 左竖线引用；纯 `>` → 空竖线（段间分隔）。
+        let out = render("> a\n>\n> b");
+        assert_eq!(texts(&out), vec!["│ a", "│", "│ b"]);
+        assert_eq!(out[0].style, Style::default().fg(theme::SUBTEXT0));
     }
 
     #[test]

@@ -142,6 +142,8 @@ pub enum Outcome {
     ChapterIntro { text: String },
     /// 终章结局文本（等待 Ack）。
     ChapterOutro { text: String },
+    /// 场景描述（进入 / 切换 / 回溯场景时展示）：由渲染层正常 markdown 渲染，不阻塞、不引用包裹。
+    SceneDescription { text: String },
     /// 叙事触发器文本（心声 / 记忆碎片 / 旁白，等待 Ack）。
     Narrative { label: String, text: String },
     /// 笔记视图。

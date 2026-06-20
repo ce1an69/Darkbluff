@@ -89,21 +89,6 @@ pub struct NpcTopic {
     pub available: bool,
 }
 
-/// 输入框右侧的瞬时状态（错误/提示/引导）。下一次按键即清除。
-#[derive(Debug, Clone)]
-pub struct StatusLine {
-    pub kind: StatusKind,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum StatusKind {
-    Info,
-    Warn,
-    Error,
-    Hint,
-}
-
 /// 斜杠补全浮层。
 #[derive(Debug, Clone)]
 pub struct Suggestions {

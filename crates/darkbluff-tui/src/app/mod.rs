@@ -42,7 +42,6 @@ pub struct App {
     pub(super) transcript: VecDeque<StyledLine>,
     pub(super) menu: Option<ActiveMenu>,
     pub(super) confirmation: Option<ConfirmationAction>,
-    pub(super) status: Option<StatusLine>,
     pub(super) suggestions: Option<Suggestions>,
     pub(super) note_panel: Option<NotePanel>,
     pub(super) notice: Option<Notice>,
@@ -75,7 +74,6 @@ impl App {
             transcript: VecDeque::new(),
             menu: None,
             confirmation: None,
-            status: None,
             suggestions: None,
             note_panel: None,
             notice: None,
@@ -137,8 +135,7 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
-        // 瞬时状态：任何新按键都清除上一条错误/提示与通知条。
-        self.status = None;
+        // 通知条：任何新按键都清除上一条。
         self.notice = None;
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.dispatch(Input::Quit);
@@ -521,7 +518,6 @@ impl App {
             suggestions: (matches!(state, SessionState::Exploring))
                 .then_some(self.suggestions.as_ref())
                 .flatten(),
-            status: self.status.as_ref(),
             note: self.note_panel.as_ref(),
             notice: self.notice.as_ref(),
             map: if matches!(state, SessionState::ChoosingCheckpoint) && !self.cached_map.is_empty()

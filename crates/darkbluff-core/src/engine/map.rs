@@ -66,7 +66,9 @@ impl Session {
                     }
                 }
                 self.state = SessionState::Exploring;
-                Outcome::Message(Message::info(self.scene_description_messages()))
+                Outcome::SceneDescription {
+                    text: self.scene_description_text(),
+                }
             }
             Err(_) => {
                 self.state = SessionState::Exploring;

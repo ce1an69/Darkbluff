@@ -53,7 +53,9 @@ impl Session {
                 self.save.current_scene = d;
                 self.persist();
                 self.state = SessionState::Exploring;
-                let base = Outcome::Message(Message::info(self.scene_description_messages()));
+                let base = Outcome::SceneDescription {
+                    text: self.scene_description_text(),
+                };
                 self.then_narrative(base)
             }
         }

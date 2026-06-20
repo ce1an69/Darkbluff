@@ -1,7 +1,7 @@
 //! 视图层：圆角紫色主题布局渲染。
 //!
 //! 布局：顶部标题条 / [左 对话转录 | 右 场景+NPC] / 库部 Claude-Code 式输入框。
-//! 转录按显示宽度折行、滚动到尾；系统提示不入转录，转为输入框右侧瞬时状态。
+//! 转录按显示宽度折行、滚动到尾；提示/心声等以引用块入转录，输入框只留命令行。
 //! 按关注点拆分：[`home`]（首页）/ [`layout`]（常规面板）/ [`overlays`]（浮层）/
 //! [`text`]（宽度工具）/ [`tests`]（无头渲染测试）。
 
@@ -25,7 +25,7 @@ use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
-use crate::app::{AnimationView, NotePanel, Notice, NpcInfo, StatusLine, Suggestions};
+use crate::app::{AnimationView, NotePanel, Notice, NpcInfo, Suggestions};
 use crate::input::CommandInput;
 use crate::markdown::StyledLine;
 use crate::theme;
@@ -73,7 +73,6 @@ pub struct ViewState<'a> {
     pub menu: Option<MenuView<'a>>,
     pub confirmation: Option<&'a ConfirmationAction>,
     pub suggestions: Option<&'a Suggestions>,
-    pub status: Option<&'a StatusLine>,
     pub note: Option<&'a NotePanel>,
     pub notice: Option<&'a Notice>,
     pub map: Option<&'a [MapGroup]>,

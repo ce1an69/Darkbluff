@@ -76,7 +76,7 @@ fn new_game_shows_intro_then_exploring() {
     }
     assert_eq!(*s.state(), SessionState::ShowingIntro);
     match s.handle(Input::Ack) {
-        Outcome::Message(message) => assert!(message.lines.join("").contains("酒馆")),
+        Outcome::SceneDescription { text } => assert!(text.contains("酒馆")),
         o => panic!("expected show, got {:?}", o),
     }
     assert_eq!(*s.state(), SessionState::Exploring);
@@ -185,7 +185,7 @@ fn move_blocked_and_allowed() {
         o => panic!("got {:?}", o),
     }
     match s.handle(Input::Text("move market".into())) {
-        Outcome::Message(message) => assert!(message.lines[0].contains("集市")),
+        Outcome::SceneDescription { text } => assert!(text.contains("集市")),
         o => panic!("got {:?}", o),
     }
     assert_eq!(s.save().current_scene, "market");
@@ -237,7 +237,7 @@ fn map_rollback_to_chapter_start() {
         o => panic!("expected intro re-show, got {:?}", o),
     }
     match s.handle(Input::Ack) {
-        Outcome::Message(_) => {}
+        Outcome::SceneDescription { .. } => {}
         o => panic!("got {:?}", o),
     }
     assert!(!s.save().has_clue("c1", "wolf_alibi"));
@@ -464,7 +464,7 @@ fn title_new_game_starts_chapter() {
     s.handle(Input::Text("".into())); // 触发 Title 菜单
     match s.handle(Input::Select(Selection::Index(0))) {
         Outcome::ChapterIntro { text } => assert!(text.contains("首章开场")),
-        Outcome::Message(_) => {} // 无 intro 时直接展示场景消息
+        Outcome::SceneDescription { .. } => {} // 无 intro 时直接展示场景描述
         o => panic!("expected intro or show, got {:?}", o),
     }
 }
@@ -475,7 +475,7 @@ fn menu_selection_can_use_option_id() {
     s.handle(Input::Text("".into()));
     match s.handle(Input::Select(Selection::Id("new_game".into()))) {
         Outcome::ChapterIntro { text } => assert!(text.contains("首章开场")),
-        Outcome::Message(_) => {}
+        Outcome::SceneDescription { .. } => {}
         o => panic!("expected intro or show, got {:?}", o),
     }
 }

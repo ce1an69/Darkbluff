@@ -8,15 +8,14 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::{NpcInfo, StatusKind};
+use crate::app::NpcInfo;
 use crate::theme;
 
 use super::ViewState;
 use super::overlays::draw_suggestions;
-use super::text::{truncate_s, wrap_by_width};
+use super::text::wrap_by_width;
 
 const INPUT_PROMPT: &str = "> ";
-const MAX_STATUS_COLS: usize = 30;
 
 pub(super) fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
     let block = theme::panel(None, false);
@@ -236,8 +235,6 @@ pub(super) fn draw_input(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
 }
 
 fn render_exploring_input(frame: &mut Frame, inner: Rect, state: &ViewState<'_>) {
-    let [left, right] =
-        Layout::horizontal([Constraint::Min(0), Constraint::Length(34)]).areas(inner);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
@@ -248,17 +245,13 @@ fn render_exploring_input(frame: &mut Frame, inner: Rect, state: &ViewState<'_>)
             ),
             Span::styled(state.input.value(), Style::default().fg(theme::TEXT)),
         ])),
-        left,
-    );
-    frame.render_widget(
-        Paragraph::new(status_or_hint(state)).alignment(Alignment::Right),
-        right,
+        inner,
     );
     // 光标：左边框(1) + 提示符宽 + 光标前可见宽。
     let prompt_w = UnicodeWidthStr::width(INPUT_PROMPT) as u16;
-    let x = left.x + prompt_w + state.input.display_cursor();
-    let max_x = left.x + left.width.saturating_sub(1);
-    frame.set_cursor_position((x.min(max_x), left.y));
+    let x = inner.x + prompt_w + state.input.display_cursor();
+    let max_x = inner.x + inner.width.saturating_sub(1);
+    frame.set_cursor_position((x.min(max_x), inner.y));
 }
 
 fn render_hint(frame: &mut Frame, area: Rect, label: &str, hint: &str) {
@@ -271,21 +264,3 @@ fn render_hint(frame: &mut Frame, area: Rect, label: &str, hint: &str) {
     );
 }
 
-fn status_or_hint(state: &ViewState<'_>) -> Line<'static> {
-    if let Some(st) = state.status {
-        let color = match st.kind {
-            StatusKind::Info => theme::BLUE,
-            StatusKind::Warn => theme::YELLOW,
-            StatusKind::Error => theme::RED,
-            StatusKind::Hint => theme::MAUVE,
-        };
-        return Line::from(vec![Span::styled(
-            truncate_s(&st.text, MAX_STATUS_COLS),
-            Style::default().fg(color),
-        )]);
-    }
-    Line::from(vec![Span::styled(
-        "Tab complete · / for commands",
-        Style::default().fg(theme::OVERLAY0),
-    )])
-}

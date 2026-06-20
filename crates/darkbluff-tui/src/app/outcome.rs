@@ -9,7 +9,6 @@ use ratatui::style::{Modifier, Style};
 use crate::markdown::{self, StyledLine};
 use crate::theme;
 
-use super::types::{StatusKind, StatusLine};
 use super::{ActiveMenu, App, NotePanel, NoteTab, Notice};
 
 /// 转录最多保留的行数（FIFO 滚动）。
@@ -26,6 +25,7 @@ impl App {
             } => self.apply_dialogue(header, body, notes),
             Outcome::ChapterIntro { text } => self.apply_chapter_card("▌ Intro", &text),
             Outcome::ChapterOutro { text } => self.apply_chapter_card("▌ Outro", &text),
+            Outcome::SceneDescription { text } => self.apply_scene_description(&text),
             Outcome::Narrative { label, text } => self.apply_narrative(label, &text),
             Outcome::Notes(notes) => self.apply_notes(notes),
             Outcome::EndingReached {
@@ -46,7 +46,7 @@ impl App {
         self.push_line(header, header_style(theme::MAUVE));
         self.push_md(&body);
         if !notes.is_empty() {
-            self.set_status(StatusKind::Hint, notes.join("  ·  "));
+            self.push_md(&quote_block(&notes.join("  ·  ")));
         }
     }
 
@@ -54,15 +54,18 @@ impl App {
         self.push_blank();
         self.push_line(title.into(), header_style(theme::LAVENDER));
         self.push_md(text);
-        self.set_status(StatusKind::Info, "Press Enter to continue".into());
     }
 
-    /// 心声 / 记忆碎片 / 旁白（走不出去）：PINK 前缀 + 正文，区别于对话与过场。
+    /// 场景描述：正常 markdown 渲染进转录（标题 + 正文），不引用包裹、不阻塞。
+    fn apply_scene_description(&mut self, text: &str) {
+        self.push_blank();
+        self.push_md(text);
+    }
+
+    /// 心声 / 记忆碎片 / 旁白（走不出去）：整段以引用块呈现，label 融入首行。
     fn apply_narrative(&mut self, label: String, text: &str) {
         self.push_blank();
-        self.push_line(format!("▌ {label}"), header_style(theme::PINK));
-        self.push_md(text);
-        self.set_status(StatusKind::Info, "Press Enter to continue".into());
+        self.push_md(&narrative_quote(&label, text));
     }
 
     fn apply_notes(&mut self, notes: NoteView) {
@@ -91,7 +94,6 @@ impl App {
             format!("Endings discovered  {found}/{total}"),
             Style::default().fg(theme::SUBTEXT0),
         );
-        self.set_status(StatusKind::Info, "Press Enter to return".into());
     }
 
     fn apply_message(&mut self, message: Message) {
@@ -104,20 +106,18 @@ impl App {
                 });
             }
         }
-        // 多行（如 help）进转录可读可滚；单行瞬时反馈进输入框右侧状态。
+        // 全部进转录：多行（help / 拼接警告）正常 markdown 渲染；单行瞬时反馈（gaze 动作 / 提示）
+        // 包成引用块，错误级保留红色以示严重。
         if message.lines.len() > 1 {
             self.push_blank();
-            let style = Style::default().fg(theme::SUBTEXT0);
-            for line in message.lines {
-                self.push_line(line, style);
-            }
+            self.push_md(&message.lines.join("\n"));
         } else {
-            let kind = match message.level {
-                MessageLevel::Info => StatusKind::Info,
-                MessageLevel::Warning => StatusKind::Warn,
-                MessageLevel::Error => StatusKind::Error,
-            };
-            self.set_status(kind, message.lines.into_iter().next().unwrap_or_default());
+            let line = message.lines.into_iter().next().unwrap_or_default();
+            if matches!(message.level, MessageLevel::Error) {
+                self.push_line(format!("│ {line}"), Style::default().fg(theme::RED));
+            } else {
+                self.push_md(&quote_block(&line));
+            }
         }
     }
 
@@ -153,10 +153,6 @@ impl App {
 
     pub(super) fn push_blank(&mut self) {
         self.push_line(String::new(), Style::default());
-    }
-
-    pub(super) fn set_status(&mut self, kind: StatusKind, text: String) {
-        self.status = Some(StatusLine { kind, text });
     }
 }
 
@@ -207,9 +203,48 @@ mod tests {
             0
         );
     }
+
+    #[test]
+    fn narrative_quote_strips_markdown_heading() {
+        // 心声文本里的 `# 标题` 经引用渲染后不应残留字面 `#`（regression: 走不出去场景）。
+        let q = narrative_quote("旁白", "# 走不出去\n\n你朝桥对面走。");
+        let rendered: Vec<String> =
+            crate::markdown::render(&q).into_iter().map(|s| s.text).collect();
+        assert_eq!(rendered[0], "│ 〔旁白〕走不出去");
+        assert!(rendered.iter().any(|l| l.contains("你朝桥对面走。")));
+    }
 }
 
 /// 转录里的小标题样式（彩色 + 粗体）。
 fn header_style(color: ratatui::style::Color) -> Style {
     Style::default().fg(color).add_modifier(Modifier::BOLD)
+}
+
+/// 去掉行首 markdown 标题/列表前缀，避免引用块里残留字面 `#`/`•`。
+fn strip_md_prefix(line: &str) -> &str {
+    line.trim_start_matches("### ")
+        .trim_start_matches("## ")
+        .trim_start_matches("# ")
+        .trim_start_matches("- ")
+        .trim_start_matches("* ")
+}
+
+/// 把任意文本包成 markdown 引用块（每行加 `> ` 前缀），供 [`App::push_md`] 渲染成竖线引用。
+fn quote_block(text: &str) -> String {
+    text.lines()
+        .map(|l| format!("> {}", strip_md_prefix(l)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// 心声引用：label 融入首行，正文每行加引用前缀；标题/列表标记一并剥除。
+fn narrative_quote(label: &str, text: &str) -> String {
+    let mut lines = text.lines();
+    let head = strip_md_prefix(lines.next().unwrap_or(""));
+    let mut out = format!("> 〔{label}〕{head}");
+    for l in lines {
+        out.push_str("\n> ");
+        out.push_str(strip_md_prefix(l));
+    }
+    out
 }

@@ -29,15 +29,16 @@ impl Session {
         }
 
         self.state = SessionState::Exploring;
-        let has_warnings = !warnings.is_empty();
-        let mut msgs = warnings;
-        msgs.extend(self.scene_description_messages());
-        let message = if has_warnings {
-            Message::warning(msgs)
-        } else {
-            Message::info(msgs)
-        };
-        Outcome::Message(message)
+        // 存档回退警告（罕见）：与场景描述合为一个多行 warning 消息；无警告则走专门的
+        // 场景描述通道（正常 markdown 渲染，不再依赖行数路由）。
+        if !warnings.is_empty() {
+            let mut msgs = warnings;
+            msgs.push(self.scene_description_text());
+            return Outcome::Message(Message::warning(msgs));
+        }
+        Outcome::SceneDescription {
+            text: self.scene_description_text(),
+        }
     }
 
     /// 当前章必要审判是否已完成（供 continue_with 检测被中断的自动推进）。
@@ -143,7 +144,9 @@ impl Session {
         }
         self.state = SessionState::Exploring;
         self.persist();
-        let base = Outcome::Message(Message::info(self.scene_description_messages()));
+        let base = Outcome::SceneDescription {
+            text: self.scene_description_text(),
+        };
         self.then_narrative(base)
     }
 
