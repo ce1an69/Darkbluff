@@ -80,7 +80,7 @@ impl App {
         self.push_md(text);
     }
 
-    /// 心声 / 记忆碎片 / 旁白（走不出去）：整段以引用块呈现，label 融入首行。
+    /// 叙事触发器（心声 / 记忆碎片 / 旁白）：整段以引用块呈现。面板已显示分类标题，不在正文中重复标签。
     fn apply_narrative(&mut self, label: String, text: &str) {
         self.push_blank();
         self.pending_tw_skip = 1; // blank 瞬显
@@ -201,7 +201,7 @@ mod tests {
         let q = narrative_quote("旁白", "# 走不出去\n\n你朝桥对面走。");
         let rendered: Vec<String> =
             crate::markdown::render(&q).into_iter().map(|s| s.text).collect();
-        assert_eq!(rendered[0], "│ 〔旁白〕走不出去");
+        assert_eq!(rendered[0], "│ 走不出去");
         assert!(rendered.iter().any(|l| l.contains("你朝桥对面走。")));
     }
 
@@ -270,11 +270,11 @@ fn quote_block(text: &str) -> String {
         .join("\n")
 }
 
-/// 心声引用：label 融入首行，正文每行加引用前缀；标题/列表标记一并剥除。
-fn narrative_quote(label: &str, text: &str) -> String {
+/// 叙事引用：正文每行加引用前缀，首行无标签（面板已显示分类标题）。
+fn narrative_quote(_label: &str, text: &str) -> String {
     let mut lines = text.lines();
     let head = strip_md_prefix(lines.next().unwrap_or(""));
-    let mut out = format!("> 〔{label}〕{head}");
+    let mut out = format!("> {head}");
     for l in lines {
         out.push_str("\n> ");
         out.push_str(strip_md_prefix(l));

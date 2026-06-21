@@ -172,10 +172,10 @@ impl App {
             return;
         }
         // 速度：目标列/秒，按 ANIMATION_TICK(33ms) 折算为每 tick 列数。
-        //   Full ≈ 30 列/秒 → 1 列/tick；Reduced ≈ 90 列/秒 → 3 列/tick。
+        //   Full ≈ 60 列/秒 → 2 列/tick；Reduced ≈ 120 列/秒 → 4 列/tick。
         let step = match self.motion {
-            EffectiveMotion::Full => 1,
-            EffectiveMotion::Reduced => 3,
+            EffectiveMotion::Full => 2,
+            EffectiveMotion::Reduced => 4,
             EffectiveMotion::Off => unreachable!(),
         };
         tw.revealed = tw.revealed.saturating_add(step).min(tw.total);
