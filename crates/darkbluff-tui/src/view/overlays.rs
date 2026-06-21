@@ -2,10 +2,11 @@
 
 use darkbluff_core::engine::{ConfirmationAction, MenuKind};
 use ratatui::Frame;
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Clear, List, ListItem, ListState, Paragraph, Widget, Wrap};
 
 use crate::app::{SuggestKind, Suggestions};
 use crate::theme;
@@ -53,14 +54,19 @@ fn menu_title(kind: MenuKind) -> &'static str {
     }
 }
 
-/// 确认对话框（NewGame / Rollback，中文提示）。
+/// 确认对话框（NewGame / Rollback，中文提示）。高度随提示换行行数自适应，
+/// 避免短提示时框过高、底部留白过多。
 pub(super) fn draw_confirmation(frame: &mut Frame, area: Rect, action: &ConfirmationAction) {
-    let popup = centered_rect(area, 58, 7);
+    let prompt = confirm_prompt(action);
+    let popup_w = 58u16.min(area.width.saturating_sub(4)).max(20);
+    // 提示行 + 空行 + 按键行 + 上下边框
+    let height = wrapped_height(&prompt, popup_w.saturating_sub(2)) + 1 + 1 + 2;
+    let popup = centered_rect(area, popup_w, height);
     frame.render_widget(Clear, popup);
     let block = theme::panel(Some("确认"), true);
 
     let text = Text::from(vec![
-        Line::from(confirm_prompt(action)).style(Style::default().fg(theme::TEXT)),
+        Line::from(prompt).style(Style::default().fg(theme::TEXT)),
         Line::from(""),
         Line::from("y / Enter 确认     n / Esc 取消")
             .style(Style::default().fg(theme::SUBTEXT0))
@@ -70,6 +76,26 @@ pub(super) fn draw_confirmation(frame: &mut Frame, area: Rect, action: &Confirma
         Paragraph::new(text).block(block).wrap(Wrap { trim: true }),
         popup,
     );
+}
+
+/// 用 ratatui 自身的 wrap 渲染统计文本在给定内容宽度下占用的行数，
+/// 保证与实际渲染（含 word-break / trim）完全一致。
+fn wrapped_height(text: &str, width: u16) -> u16 {
+    let width = width.max(1);
+    let max_h = 64u16;
+    let mut buf = Buffer::empty(Rect::new(0, 0, width, max_h));
+    Paragraph::new(text)
+        .wrap(Wrap { trim: true })
+        .render(Rect::new(0, 0, width, max_h), &mut buf);
+    let w = width as usize;
+    let mut last = 1u16;
+    for y in 0..max_h {
+        let row = &buf.content[(y as usize * w)..((y as usize + 1) * w)];
+        if row.iter().any(|c| c.symbol() != " ") {
+            last = y + 1;
+        }
+    }
+    last
 }
 
 fn confirm_prompt(action: &ConfirmationAction) -> String {
