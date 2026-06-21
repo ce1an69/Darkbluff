@@ -15,7 +15,7 @@ use crate::theme;
 
 pub(super) fn draw_note_panel(frame: &mut Frame, area: Rect, panel: &NotePanel) {
     frame.render_widget(Clear, area);
-    let block = theme::panel(Some("Notes  ·  1-4 tab · Esc close"), true);
+    let block = theme::panel(Some("笔记  ·  1-4 切换 · Esc 关闭"), true);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -26,7 +26,7 @@ pub(super) fn draw_note_panel(frame: &mut Frame, area: Rect, panel: &NotePanel) 
     let lines = tab_lines(&panel.view, panel.tab);
     if lines.is_empty() {
         frame.render_widget(
-            Paragraph::new("— nothing here yet —")
+            Paragraph::new("— 暂无内容 —")
                 .style(Style::default().fg(theme::SUBTEXT0))
                 .alignment(Alignment::Center),
             body_a,

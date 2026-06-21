@@ -41,28 +41,28 @@ pub(super) fn draw_menu(frame: &mut Frame, area: Rect, menu: &MenuView<'_>) {
 
 fn menu_title(kind: MenuKind) -> &'static str {
     match kind {
-        MenuKind::Title => "Title",
+        MenuKind::Title => "标题",
         // Settings 实际由 view::home::draw_home 渲染（ChoosingSettings 走标题子屏），
         // 此分支不会被 draw_menu 触达，仅为 match 穷尽性保留。
-        MenuKind::Settings => "Settings",
-        MenuKind::AskCharacter => "Ask Character",
-        MenuKind::AskTopic => "Ask Topic",
-        MenuKind::JudgeCharacter => "Judge",
-        MenuKind::MoveDestination => "Move",
-        MenuKind::Checkpoint => "Checkpoint",
+        MenuKind::Settings => "设置",
+        MenuKind::AskCharacter => "询问角色",
+        MenuKind::AskTopic => "选择话题",
+        MenuKind::JudgeCharacter => "审判",
+        MenuKind::MoveDestination => "前往",
+        MenuKind::Checkpoint => "检查点",
     }
 }
 
-/// 确认对话框（NewGame / Rollback，英文提示）。
+/// 确认对话框（NewGame / Rollback，中文提示）。
 pub(super) fn draw_confirmation(frame: &mut Frame, area: Rect, action: &ConfirmationAction) {
     let popup = centered_rect(area, 58, 7);
     frame.render_widget(Clear, popup);
-    let block = theme::panel(Some("Confirm"), true);
+    let block = theme::panel(Some("确认"), true);
 
     let text = Text::from(vec![
         Line::from(confirm_prompt(action)).style(Style::default().fg(theme::TEXT)),
         Line::from(""),
-        Line::from("y / Enter confirm     n / Esc cancel")
+        Line::from("y / Enter 确认     n / Esc 取消")
             .style(Style::default().fg(theme::SUBTEXT0))
             .centered(),
     ]);
@@ -75,10 +75,10 @@ pub(super) fn draw_confirmation(frame: &mut Frame, area: Rect, action: &Confirma
 fn confirm_prompt(action: &ConfirmationAction) -> String {
     match action {
         ConfirmationAction::NewGame => {
-            "An existing save will be overwritten by a new game. Continue?".to_string()
+            "开始新游戏将覆盖现有存档。继续吗？".to_string()
         }
         ConfirmationAction::Rollback { checkpoint_id } => format!(
-            "Roll back to checkpoint {checkpoint_id}? This discards progress after it (discovered memories kept). Continue?"
+            "回滚到检查点 {checkpoint_id}？这将丢弃其后的进度（已发现的记忆保留）。继续吗？"
         ),
     }
 }
@@ -119,10 +119,10 @@ pub(super) fn draw_suggestions(frame: &mut Frame, input_area: Rect, sg: &Suggest
 
 fn suggest_title(kind: SuggestKind) -> &'static str {
     match kind {
-        SuggestKind::Command => "Commands",
-        SuggestKind::Character => "Characters",
-        SuggestKind::Scene => "Scenes",
-        SuggestKind::Topic => "Topics",
+        SuggestKind::Command => "指令",
+        SuggestKind::Character => "角色",
+        SuggestKind::Scene => "场景",
+        SuggestKind::Topic => "话题",
     }
 }
 

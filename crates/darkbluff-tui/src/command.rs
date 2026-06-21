@@ -1,7 +1,7 @@
-//! TUI 本地的指令展示元数据（英文），用于斜杠补全与提示。
+//! TUI 本地的指令展示元数据（中文），用于斜杠补全与提示。
 //!
 //! 指令**名单**直接取自引擎权威源 [`darkbluff_core::engine::COMMAND_NAMES`]（解析与补全共用，
-//! 不会漂移）；英文 `desc`/`args` 是纯 UI 文案，留在本层。
+//! 不会漂移）；中文 `desc`/`args` 是纯 UI 文案，留在本层。
 
 use darkbluff_core::engine::COMMAND_NAMES;
 
@@ -31,24 +31,24 @@ pub fn is_known(verb: &str) -> bool {
 
 fn desc_for(name: &str) -> &'static str {
     match name {
-        "ask" => "Question a character",
-        "judge" => "Judge a character",
-        "move" => "Travel to a scene",
-        "gaze" => "Switch perspective",
-        "map" => "Open checkpoint map",
-        "note" => "Review seen notes",
-        "help" => "Show command help",
-        "quit" => "Save and exit",
+        "ask" => "询问在场角色",
+        "judge" => "审判角色",
+        "move" => "前往其他场景",
+        "gaze" => "切换视角",
+        "map" => "打开章节地图",
+        "note" => "查看笔记",
+        "help" => "查看指令帮助",
+        "quit" => "存档并退出",
         _ => "",
     }
 }
 
 fn args_for(name: &str) -> &'static str {
     match name {
-        "ask" => "[target] [topic]",
-        "judge" => "[target]",
-        "move" => "[dest]",
-        "help" => "[cmd]",
+        "ask" => "[对象] [话题]",
+        "judge" => "[对象]",
+        "move" => "[目的地]",
+        "help" => "[指令]",
         _ => "",
     }
 }

@@ -53,7 +53,7 @@ pub(super) fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) 
     ];
     if state.no_motion {
         spans.push(Span::styled(
-            "  no-motion",
+            "  禁用动画",
             Style::default().fg(theme::OVERLAY0),
         ));
     }
@@ -62,7 +62,7 @@ pub(super) fn draw_header(frame: &mut Frame, area: Rect, state: &ViewState<'_>) 
     let (found, total) = state.endings;
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("Endings ", Style::default().fg(theme::OVERLAY0)),
+            Span::styled("结局 ", Style::default().fg(theme::OVERLAY0)),
             Span::styled(
                 format!("{found}/{total}"),
                 Style::default().fg(theme::LAVENDER),
@@ -95,26 +95,26 @@ pub(super) fn draw_transcript(frame: &mut Frame, area: Rect, state: &ViewState<'
 /// 空转录提示（transcript 仅增长，空即贴底，无 offset 概念）。
 fn render_empty_transcript(frame: &mut Frame, area: Rect) {
     let hint = Paragraph::new(Line::from(vec![
-        Span::styled("No dialogue yet. Type ", Style::default().fg(theme::SUBTEXT0)),
+        Span::styled("暂无对话。输入 ", Style::default().fg(theme::SUBTEXT0)),
         Span::styled(
             "/ask",
             Style::default()
                 .fg(theme::MAUVE)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" to question someone.", Style::default().fg(theme::SUBTEXT0)),
+        Span::styled(" 询问他人。", Style::default().fg(theme::SUBTEXT0)),
     ]))
     .alignment(Alignment::Center)
-    .block(theme::panel(Some("Transcript"), false));
+    .block(theme::panel(Some("对话记录"), false));
     frame.render_widget(hint, area);
 }
 
 /// offset>0 时标题加位置指示（↑N = 末尾之上 N 视觉行）。
 fn transcript_title(offset: usize) -> String {
     if offset > 0 {
-        format!("Transcript ↑{offset}")
+        format!("对话记录 ↑{offset}")
     } else {
-        "Transcript".to_string()
+        "对话记录".to_string()
     }
 }
 
@@ -189,7 +189,7 @@ pub(super) fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
     // 标题界面尚未进入任何章节：避免透出空 chapter/scene 的占位假场景。
     if matches!(state.state, SessionState::Title) {
         frame.render_widget(
-            Paragraph::new(Line::from("Begin a new game to explore."))
+            Paragraph::new(Line::from("开始新游戏以探索。"))
                 .style(Style::default().fg(theme::SUBTEXT0))
                 .alignment(Alignment::Center)
                 .block(block),
@@ -201,14 +201,14 @@ pub(super) fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
     let mut lines: Vec<Line<'_>> = scene_description_lines(state);
     lines.push(Line::from(""));
     lines.push(
-        Line::from("PRESENT").style(
+        Line::from("在场").style(
             Style::default()
                 .fg(theme::OVERLAY1)
                 .add_modifier(Modifier::BOLD),
         ),
     );
     if state.npcs.is_empty() {
-        lines.push(Line::from("  no one to ask here").style(Style::default().fg(theme::SUBTEXT0)));
+        lines.push(Line::from("  此处无人可询问").style(Style::default().fg(theme::SUBTEXT0)));
     }
     for npc in state.npcs {
         lines.push(npc_line(npc));
@@ -224,9 +224,9 @@ pub(super) fn draw_scene(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
 
 fn scene_title(state: &ViewState<'_>) -> String {
     if matches!(state.state, SessionState::Title) {
-        "Scene".to_string()
+        "场景".to_string()
     } else {
-        format!("Scene · {}", state.scene_name)
+        format!("场景 · {}", state.scene_name)
     }
 }
 
@@ -283,15 +283,15 @@ pub(super) fn draw_input(frame: &mut Frame, area: Rect, state: &ViewState<'_>) {
         SessionState::Confirming => render_hint(
             frame,
             inner,
-            "Confirm",
-            "y / Enter confirm · n / Esc cancel",
+            "确认",
+            "y / Enter 确认 · n / Esc 取消",
         ),
-        s if s.is_ack() => render_hint(frame, inner, "Continue", "press Enter · wheel/PageUp 滚动"),
+        s if s.is_ack() => render_hint(frame, inner, "继续", "按 Enter 继续 · 滚轮/PageUp 滚动"),
         _ => render_hint(
             frame,
             inner,
-            "Select",
-            "↑/↓ choose · Enter confirm · Esc cancel · digits jump",
+            "选择",
+            "↑/↓ 选择 · Enter 确认 · Esc 取消 · 数字键跳转",
         ),
     }
 

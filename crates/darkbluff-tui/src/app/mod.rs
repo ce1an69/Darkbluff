@@ -435,20 +435,20 @@ impl App {
     ) {
         let save = self.session.save();
         let label = match outcome {
-            darkbluff_core::engine::Outcome::ChapterIntro { .. } => Some("Chapter"),
+            darkbluff_core::engine::Outcome::ChapterIntro { .. } => Some("章节"),
             darkbluff_core::engine::Outcome::ChapterOutro { .. }
-            | darkbluff_core::engine::Outcome::EndingReached { .. } => Some("Ending"),
-            darkbluff_core::engine::Outcome::Narrative { .. } => Some("Voice"),
+            | darkbluff_core::engine::Outcome::EndingReached { .. } => Some("结局"),
+            darkbluff_core::engine::Outcome::Narrative { .. } => Some("心声"),
             // 仅在「已在章节内」时才用存档 diff 兜底；Title 态 before_chapter 为空
             //（继续/新游戏前的默认存档），避免读档/开局误触发移动动画。
             _ if !before_chapter.is_empty() && save.current_chapter != before_chapter => {
-                Some("Chapter")
+                Some("章节")
             }
             _ if !before_chapter.is_empty() && save.current_world != before_world => {
-                Some("Gaze")
+                Some("视角")
             }
             _ if !before_chapter.is_empty() && save.current_scene != before_scene => {
-                Some("Move")
+                Some("移动")
             }
             _ => None,
         };
@@ -505,7 +505,7 @@ impl App {
             .unwrap_or_else(|| "—".to_string());
         let scene_text = engine
             .get_scene_description(ch, scene, world)
-            .unwrap_or("No description for this perspective.")
+            .unwrap_or("该视角暂无描述。")
             .to_string();
         let npcs = engine
             .get_characters_in_scene(ch, scene)

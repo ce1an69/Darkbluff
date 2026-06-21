@@ -15,7 +15,7 @@ use crate::view::MapGroup;
 
 pub(super) fn draw_map_panel(frame: &mut Frame, area: Rect, groups: &[MapGroup], selected: usize) {
     frame.render_widget(Clear, area);
-    let block = theme::panel(Some("Map  ·  ↑/↓ 选节点 · Enter 回滚 · Esc 取消"), true);
+    let block = theme::panel(Some("地图  ·  ↑/↓ 选节点 · Enter 回滚 · Esc 取消"), true);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

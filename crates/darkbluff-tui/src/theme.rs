@@ -147,11 +147,11 @@ pub fn world_color(world: World) -> Color {
     }
 }
 
-/// 视角英文标签。
+/// 视角中文标签。
 pub fn world_label(world: World) -> &'static str {
     match world {
-        World::Surface => "Surface",
-        World::Shadow => "Shadow",
+        World::Surface => "表面",
+        World::Shadow => "影子",
     }
 }
 

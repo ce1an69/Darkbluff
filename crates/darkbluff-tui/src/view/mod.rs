@@ -203,14 +203,14 @@ fn draw_notice(frame: &mut Frame, area: Rect, notice: &Notice) {
     };
     let text = Paragraph::new(format!(" ⚠ {}", notice.text))
         .style(Style::default().fg(color).add_modifier(Modifier::BOLD))
-        .block(theme::panel(Some("Notice"), true));
+        .block(theme::panel(Some("提示"), true));
     frame.render_widget(text, area);
 }
 
 fn draw_too_small(frame: &mut Frame, area: Rect) {
     let block = theme::panel(Some("DarkBluff"), false);
     let text = Paragraph::new(format!(
-        "Terminal too small (need >={MIN_WIDTH}x{MIN_HEIGHT})."
+        "终端尺寸过小（需 ≥{MIN_WIDTH}x{MIN_HEIGHT}）。"
     ))
     .block(block)
     .alignment(Alignment::Center);

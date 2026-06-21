@@ -28,8 +28,8 @@ impl App {
                 body,
                 notes,
             } => self.apply_dialogue(header, body, notes),
-            Outcome::ChapterIntro { text } => self.apply_chapter_card("▌ Intro", &text),
-            Outcome::ChapterOutro { text } => self.apply_chapter_card("▌ Outro", &text),
+            Outcome::ChapterIntro { text } => self.apply_chapter_card("▌ 开场", &text),
+            Outcome::ChapterOutro { text } => self.apply_chapter_card("▌ 尾声", &text),
             Outcome::SceneDescription { text } => self.apply_scene_description(&text),
             Outcome::Narrative { label, text } => self.apply_narrative(label, &text),
             Outcome::Notes(notes) => self.apply_notes(notes),
@@ -108,9 +108,9 @@ impl App {
 
     fn apply_ending(&mut self, title: String, found: usize, total: usize) {
         self.push_blank();
-        self.push_line(format!("✦ Ending · {title}"), header_style(theme::MAUVE));
+        self.push_line(format!("✦ 结局 · {title}"), header_style(theme::MAUVE));
         self.push_line(
-            format!("Endings discovered  {found}/{total}"),
+            format!("已发现结局  {found}/{total}"),
             Style::default().fg(theme::SUBTEXT0),
         );
     }

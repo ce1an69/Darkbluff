@@ -46,7 +46,7 @@ fn renders_animation_indicator() {
     let input = CommandInput::default();
     let state = SessionState::Exploring;
     let animation = AnimationView {
-        label: "Gaze",
+        label: "视角",
         progress: 0.2,
     };
     let vs = ViewState {
@@ -76,7 +76,7 @@ fn renders_animation_indicator() {
     term.draw(|f| draw(f, &vs)).unwrap();
     let text = buffer_text(term.backend().buffer());
     assert!(
-        text.contains("Gaze"),
+        text.contains("视角"),
         "animation indicator missing:\n{text}"
     );
 }
@@ -120,7 +120,7 @@ fn renders_exploring_layout_npcs_and_palette() {
         kind: SuggestKind::Command,
         items: vec![Suggestion {
             display: "/ask".into(),
-            desc: "Question a character".into(),
+            desc: "询问在场角色".into(),
             insert: "/ask ".into(),
         }],
         selected: 0,
@@ -153,14 +153,14 @@ fn renders_exploring_layout_npcs_and_palette() {
     let text = buffer_text(term.backend().buffer());
 
     for needle in [
-        "Transcript",
-        "Scene",
-        "PRESENT",
+        "对话记录",
+        "场景",
+        "在场",
         "灰狼",
         "DarkBluff",
-        "Surface",
+        "表面",
         "/ask",
-        "Endings",
+        "结局",
         "昨晚的行踪",
     ] {
         assert!(text.contains(needle), "render missing {needle:?}:\n{text}");
@@ -214,7 +214,7 @@ fn renders_menu_and_confirmation_overlays() {
     term.draw(|f| draw(f, &vs)).unwrap();
     let text = buffer_text(term.backend().buffer());
     assert!(
-        text.contains("Ask Character"),
+        text.contains("询问角色"),
         "menu title missing:\n{text}"
     );
     assert!(text.contains("灰狼"), "menu option missing:\n{text}");
@@ -245,10 +245,10 @@ fn renders_menu_and_confirmation_overlays() {
     };
     term.draw(|f| draw(f, &vs2)).unwrap();
     let text2 = buffer_text(term.backend().buffer());
-    assert!(text2.contains("Confirm"), "confirm title missing:\n{text2}");
+    assert!(text2.contains("确认"), "confirm title missing:\n{text2}");
     assert!(
-        text2.contains("overwritten"),
-        "english confirm prompt missing:\n{text2}"
+        text2.contains("覆盖"),
+        "confirm prompt missing:\n{text2}"
     );
 }
 
@@ -426,7 +426,7 @@ fn renders_map_panel_tree_and_checkpoints() {
     term.draw(|f| draw(f, &vs)).unwrap();
     let text = buffer_text(term.backend().buffer());
     for needle in [
-        "Map",
+        "地图",
         "失踪的屠夫",
         "酒馆真相",
         "★",
